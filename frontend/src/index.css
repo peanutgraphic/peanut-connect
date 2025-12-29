@@ -1,0 +1,241 @@
+@import "tailwindcss";
+
+/* Custom theme variables */
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+}
+
+/* WordPress admin overrides */
+#peanut-connect-app {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+#peanut-connect-app * {
+  box-sizing: border-box;
+}
+
+/* Reset WordPress admin styles within our app */
+#peanut-connect-app a {
+  text-decoration: none;
+}
+
+#peanut-connect-app button {
+  cursor: pointer;
+}
+
+#peanut-connect-app input,
+#peanut-connect-app textarea,
+#peanut-connect-app select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Ensure no native select arrows appear */
+#peanut-connect-app select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none;
+}
+
+/* Custom scrollbar */
+#peanut-connect-app ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#peanut-connect-app ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+#peanut-connect-app ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+#peanut-connect-app ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Toast animations */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out forwards;
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out forwards;
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* Dark mode styles */
+#peanut-connect-app.dark {
+  color: #e2e8f0;
+  --tw-bg-opacity: 1;
+}
+
+#peanut-connect-app.dark .bg-slate-50 {
+  background-color: #0f172a;
+}
+
+#peanut-connect-app.dark .bg-white {
+  background-color: #1e293b;
+}
+
+#peanut-connect-app.dark .bg-slate-100 {
+  background-color: #1e293b;
+}
+
+#peanut-connect-app.dark .border-slate-200 {
+  border-color: #334155;
+}
+
+#peanut-connect-app.dark .border-slate-100 {
+  border-color: #334155;
+}
+
+#peanut-connect-app.dark .text-slate-900 {
+  color: #f1f5f9;
+}
+
+#peanut-connect-app.dark .text-slate-800 {
+  color: #e2e8f0;
+}
+
+#peanut-connect-app.dark .text-slate-700 {
+  color: #cbd5e1;
+}
+
+#peanut-connect-app.dark .text-slate-600 {
+  color: #94a3b8;
+}
+
+#peanut-connect-app.dark .text-slate-500 {
+  color: #64748b;
+}
+
+#peanut-connect-app.dark .text-slate-400 {
+  color: #64748b;
+}
+
+#peanut-connect-app.dark .hover\:bg-slate-50:hover {
+  background-color: #334155;
+}
+
+#peanut-connect-app.dark .hover\:bg-slate-100:hover {
+  background-color: #334155;
+}
+
+/* Dark mode scrollbar */
+#peanut-connect-app.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+#peanut-connect-app.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+#peanut-connect-app.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Dark mode cards and modals */
+#peanut-connect-app.dark .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+}
+
+#peanut-connect-app.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.2);
+}
+
+/* Dark mode for colored backgrounds */
+#peanut-connect-app.dark .bg-primary-50 {
+  background-color: rgba(37, 99, 235, 0.2);
+}
+
+#peanut-connect-app.dark .bg-green-50 {
+  background-color: rgba(22, 163, 74, 0.2);
+}
+
+#peanut-connect-app.dark .bg-amber-50 {
+  background-color: rgba(217, 119, 6, 0.2);
+}
+
+#peanut-connect-app.dark .bg-red-50 {
+  background-color: rgba(220, 38, 38, 0.2);
+}
+
+#peanut-connect-app.dark .bg-blue-50 {
+  background-color: rgba(37, 99, 235, 0.2);
+}
+
+/* Dark mode inputs */
+#peanut-connect-app.dark input,
+#peanut-connect-app.dark textarea,
+#peanut-connect-app.dark select {
+  background-color: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+#peanut-connect-app.dark input::placeholder,
+#peanut-connect-app.dark textarea::placeholder {
+  color: #64748b;
+}
+
+/* Dark mode skeleton */
+#peanut-connect-app.dark .bg-slate-200 {
+  background-color: #334155;
+}

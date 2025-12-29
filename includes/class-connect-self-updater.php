@@ -1,0 +1,195 @@
+<?php
+/**
+ * Peanut Connect Self-Updater
+ *
+ * Handles self-hosted plugin updates from peanutgraphic.com
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class Peanut_Connect_Self_Updater {
+
+    /**
+     * Update server API URL - uses path parameter instead of query string
+     * due to server configuration stripping query parameters
+     */
+    private const API_URL = 'https://www.peanutgraphic.com/wp-json/peanut-api/v1/updates/peanut-connect';
+
+    /**
+     * Plugin slug
+     */
+    private const PLUGIN_SLUG = 'peanut-connect';
+
+    /**
+     * Plugin file path
+     */
+    private string $plugin_file;
+
+    /**
+     * Cached update info
+     */
+    private ?object $update_info = null;
+
+    /**
+     * Constructor
+     */
+    public function __construct() {
+        $this->plugin_file = 'peanut-connect/peanut-connect.php';
+        $this->init_hooks();
+    }
+
+    /**
+     * Initialize hooks
+     */
+    private function init_hooks(): void {
+        // Check for updates
+        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_update']);
+
+        // Plugin information popup
+        add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
+    }
+
+    /**
+     * Check for plugin updates
+     */
+    public function check_for_update($transient) {
+        if (empty($transient->checked)) {
+            return $transient;
+        }
+
+        // Get current version
+        $current_version = $transient->checked[$this->plugin_file] ?? '0.0.0';
+
+        // Get remote update info
+        $remote = $this->get_remote_update_info($current_version);
+
+        if ($remote && isset($remote->version)) {
+            if (version_compare($remote->version, $current_version, '>')) {
+                $transient->response[$this->plugin_file] = (object) [
+                    'slug' => self::PLUGIN_SLUG,
+                    'plugin' => $this->plugin_file,
+                    'new_version' => $remote->version,
+                    'package' => $remote->download_url ?? '',
+                    'url' => $remote->homepage ?? 'https://peanutgraphic.com/peanut-connect',
+                    'tested' => $remote->tested ?? '',
+                    'requires_php' => $remote->requires_php ?? '8.0',
+                    'requires' => $remote->requires ?? '6.0',
+                ];
+            } else {
+                // No update available
+                $transient->no_update[$this->plugin_file] = (object) [
+                    'slug' => self::PLUGIN_SLUG,
+                    'plugin' => $this->plugin_file,
+                    'new_version' => $current_version,
+                    'url' => $remote->homepage ?? 'https://peanutgraphic.com/peanut-connect',
+                ];
+            }
+        }
+
+        return $transient;
+    }
+
+    /**
+     * Plugin information for popup
+     */
+    public function plugin_info($result, $action, $args) {
+        if ($action !== 'plugin_information' || $args->slug !== self::PLUGIN_SLUG) {
+            return $result;
+        }
+
+        $remote = $this->get_remote_update_info('0.0.0');
+
+        if (!$remote) {
+            return $result;
+        }
+
+        return (object) [
+            'name' => $remote->name ?? 'Peanut Connect',
+            'slug' => self::PLUGIN_SLUG,
+            'version' => $remote->version ?? '1.0.0',
+            'author' => $remote->author ?? '<a href="https://peanutgraphic.com">Peanut Graphic</a>',
+            'author_profile' => 'https://peanutgraphic.com',
+            'homepage' => $remote->homepage ?? 'https://peanutgraphic.com/peanut-connect',
+            'download_link' => $remote->download_url ?? '',
+            'trunk' => $remote->download_url ?? '',
+            'requires' => $remote->requires ?? '6.0',
+            'tested' => $remote->tested ?? '',
+            'requires_php' => $remote->requires_php ?? '8.0',
+            'sections' => [
+                'description' => '<p>Peanut Connect is a remote site monitoring and management connector that works with Peanut Suite Agency to monitor site health, updates, and performance.</p>',
+                'installation' => '<ol><li>Upload the plugin to your /wp-content/plugins/ directory</li><li>Activate the plugin</li><li>Configure your connection token in Settings</li></ol>',
+                'changelog' => '<h4>' . ($remote->version ?? '2.1.1') . '</h4><ul><li>Latest stable release</li></ul>',
+            ],
+        ];
+    }
+
+    /**
+     * Get remote update info using path parameter
+     */
+    private function get_remote_update_info(string $current_version): ?object {
+        // Check cache
+        $cache_key = 'peanut_connect_update_' . md5($current_version);
+        $cached = get_transient($cache_key);
+
+        if ($cached !== false && is_object($cached)) {
+            return $cached;
+        }
+
+        // Use path parameter instead of query string
+        // Format: /updates/peanut-connect/{version}
+        $url = self::API_URL . '/' . urlencode($current_version);
+
+        // Make request
+        $response = wp_remote_get($url, [
+            'timeout' => 10,
+            'headers' => [
+                'Accept' => 'application/json',
+            ],
+        ]);
+
+        if (is_wp_error($response)) {
+            return null;
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response));
+
+        if (!$body || !isset($body->plugin_info)) {
+            return null;
+        }
+
+        // Cache for 12 hours
+        set_transient($cache_key, $body->plugin_info, 12 * HOUR_IN_SECONDS);
+
+        return $body->plugin_info;
+    }
+
+    /**
+     * Clear update cache
+     */
+    public function clear_update_cache(): void {
+        delete_site_transient('update_plugins');
+
+        // Clear version-specific caches
+        global $wpdb;
+        $wpdb->query(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_peanut_connect_update_%'"
+        );
+        $wpdb->query(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_peanut_connect_update_%'"
+        );
+    }
+
+    /**
+     * Manually check for updates
+     */
+    public function force_update_check(): ?object {
+        $this->clear_update_cache();
+
+        $plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $this->plugin_file);
+        $current_version = $plugin_data['Version'] ?? '0.0.0';
+
+        return $this->get_remote_update_info($current_version);
+    }
+}

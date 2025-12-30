@@ -1,0 +1,490 @@
+<?php
+/**
+ * Plugin Name: Peanut Connect
+ * Plugin URI: https://peanutgraphic.com/peanut-connect
+ * Description: Lightweight connector plugin for Peanut Monitor. Allows centralized site management from your manager site.
+ * Version: 2.1.2
+ * Author: Peanut Graphic
+ * Author URI: https://peanutgraphic.com
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: peanut-connect
+ * Requires at least: 6.0
+ * Requires PHP: 8.0
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+define('PEANUT_CONNECT_VERSION', '2.1.2');
+define('PEANUT_CONNECT_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('PEANUT_CONNECT_API_NAMESPACE', 'peanut-connect/v1');
+
+/**
+ * Main Peanut Connect class
+ */
+final class Peanut_Connect {
+
+    /**
+     * @var Peanut_Connect
+     */
+    private static ?Peanut_Connect $instance = null;
+
+    /**
+     * Get singleton instance
+     */
+    public static function get_instance(): Peanut_Connect {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    /**
+     * Constructor
+     */
+    private function __construct() {
+        $this->load_dependencies();
+        $this->init_hooks();
+    }
+
+    /**
+     * Load required files
+     */
+    private function load_dependencies(): void {
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-auth.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-health.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-updates.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-error-log.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-api.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-self-updater.php';
+
+        // Initialize error logging early
+        Peanut_Connect_Error_Log::init();
+
+        // Initialize self-updater early so update check filter is registered
+        new Peanut_Connect_Self_Updater();
+    }
+
+    /**
+     * Initialize hooks
+     */
+    private function init_hooks(): void {
+        add_action('rest_api_init', [$this, 'register_api_routes']);
+        add_action('admin_menu', [$this, 'add_admin_menu']);
+        add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
+        add_action('admin_head', [$this, 'hide_admin_notices_on_react_page']);
+
+        // Add settings link to plugins page
+        add_filter('plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_settings_link']);
+    }
+
+    /**
+     * Hide admin notices on React page
+     */
+    public function hide_admin_notices_on_react_page(): void {
+        $screen = get_current_screen();
+        if ($screen && strpos($screen->id, 'peanut-connect-app') !== false) {
+            remove_all_actions('admin_notices');
+            remove_all_actions('all_admin_notices');
+        }
+    }
+
+    /**
+     * Enqueue admin assets
+     */
+    public function enqueue_admin_assets(string $hook): void {
+        // Check if this is the React SPA page
+        if ($hook === 'toplevel_page_peanut-connect-app') {
+            $this->enqueue_react_assets();
+            return;
+        }
+
+        // Legacy settings page CSS
+        if ($hook === 'settings_page_peanut-connect') {
+            wp_enqueue_style(
+                'peanut-connect-admin',
+                plugins_url('admin/css/admin.css', __FILE__),
+                [],
+                PEANUT_CONNECT_VERSION
+            );
+        }
+    }
+
+    /**
+     * Enqueue React SPA assets
+     */
+    private function enqueue_react_assets(): void {
+        $dist_path = PEANUT_CONNECT_PLUGIN_DIR . 'assets/dist/';
+        $dist_url = plugins_url('assets/dist/', __FILE__);
+
+        // Check if built assets exist
+        if (!file_exists($dist_path . 'js/main.js')) {
+            return;
+        }
+
+        // Enqueue the React app
+        wp_enqueue_script(
+            'peanut-connect-react',
+            $dist_url . 'js/main.js',
+            [],
+            PEANUT_CONNECT_VERSION,
+            true
+        );
+
+        // Add module type
+        add_filter('script_loader_tag', function($tag, $handle) {
+            if ($handle === 'peanut-connect-react') {
+                $tag = str_replace('<script ', '<script type="module" ', $tag);
+            }
+            return $tag;
+        }, 10, 2);
+
+        // Enqueue CSS
+        if (file_exists($dist_path . 'css/main.css')) {
+            wp_enqueue_style(
+                'peanut-connect-react-styles',
+                $dist_url . 'css/main.css',
+                [],
+                PEANUT_CONNECT_VERSION
+            );
+        }
+
+        // Pass config to JavaScript
+        wp_localize_script('peanut-connect-react', 'peanutConnect', [
+            'apiUrl' => rest_url('peanut-connect/v1'),
+            'nonce' => wp_create_nonce('wp_rest'),
+            'version' => PEANUT_CONNECT_VERSION,
+        ]);
+    }
+
+    /**
+     * Register REST API routes
+     */
+    public function register_api_routes(): void {
+        $api = new Peanut_Connect_API();
+        $api->register_routes();
+    }
+
+    /**
+     * Add admin menu
+     */
+    public function add_admin_menu(): void {
+        // Add top-level menu for React SPA
+        add_menu_page(
+            __('Peanut Connect', 'peanut-connect'),
+            __('Connect', 'peanut-connect'),
+            'manage_options',
+            'peanut-connect-app',
+            [$this, 'render_react_app'],
+            'dashicons-admin-links',
+            80
+        );
+
+        // Keep legacy settings page as a fallback
+        add_options_page(
+            __('Peanut Connect (Legacy)', 'peanut-connect'),
+            __('Peanut Connect', 'peanut-connect'),
+            'manage_options',
+            'peanut-connect',
+            [$this, 'render_settings_page']
+        );
+    }
+
+    /**
+     * Render React SPA
+     */
+    public function render_react_app(): void {
+        // App container within WordPress admin
+        echo '<div id="peanut-connect-app" class="wrap peanut-connect-wrap"></div>';
+
+        // Style to fit within WP admin layout
+        echo '<style>
+            .peanut-connect-wrap {
+                margin: 0 !important;
+                padding: 0 !important;
+                margin-left: -20px !important;
+                margin-right: -20px !important;
+                margin-top: -10px !important;
+                min-height: calc(100vh - 32px);
+                background: #f8fafc;
+            }
+            #wpbody-content {
+                padding-bottom: 0 !important;
+            }
+        </style>';
+    }
+
+    /**
+     * Register settings
+     */
+    public function register_settings(): void {
+        register_setting('peanut_connect', 'peanut_connect_permissions', [
+            'type' => 'array',
+            'sanitize_callback' => [$this, 'sanitize_permissions'],
+            'default' => [
+                'health_check' => true,
+                'list_updates' => true,
+                'perform_updates' => true,
+                'access_analytics' => true,
+            ],
+        ]);
+    }
+
+    /**
+     * Sanitize permissions
+     */
+    public function sanitize_permissions(array $input): array {
+        return [
+            'health_check' => true, // Always allowed
+            'list_updates' => true, // Always allowed
+            'perform_updates' => !empty($input['perform_updates']),
+            'access_analytics' => !empty($input['access_analytics']),
+        ];
+    }
+
+    /**
+     * Render settings page
+     */
+    public function render_settings_page(): void {
+        $site_key = get_option('peanut_connect_site_key');
+        $manager_url = get_option('peanut_connect_manager_url');
+        $permissions = get_option('peanut_connect_permissions', [
+            'health_check' => true,
+            'list_updates' => true,
+            'perform_updates' => true,
+            'access_analytics' => true,
+        ]);
+        $last_sync = get_option('peanut_connect_last_sync');
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html__('Peanut Connect', 'peanut-connect'); ?></h1>
+
+            <div class="card">
+                <h2><?php echo esc_html__('Connection Status', 'peanut-connect'); ?></h2>
+                <?php if ($site_key && $manager_url): ?>
+                    <p class="peanut-connect-status-connected">
+                        <span class="dashicons dashicons-yes-alt"></span>
+                        <?php echo esc_html__('Connected to:', 'peanut-connect'); ?>
+                        <strong><?php echo esc_html($manager_url); ?></strong>
+                    </p>
+                    <?php if ($last_sync): ?>
+                        <p>
+                            <?php echo esc_html__('Last sync:', 'peanut-connect'); ?>
+                            <?php echo esc_html(human_time_diff(strtotime($last_sync), time())); ?>
+                            <?php echo esc_html__('ago', 'peanut-connect'); ?>
+                        </p>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <p class="peanut-connect-status-disconnected">
+                        <span class="dashicons dashicons-warning"></span>
+                        <?php echo esc_html__('Not connected to any manager site.', 'peanut-connect'); ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+
+            <div class="card">
+                <h2><?php echo esc_html__('Site Key', 'peanut-connect'); ?></h2>
+                <?php if (!$site_key): ?>
+                    <p><?php echo esc_html__('Generate a site key to connect this site to your Peanut Monitor dashboard.', 'peanut-connect'); ?></p>
+                    <form method="post" action="">
+                        <?php wp_nonce_field('peanut_connect_generate_key'); ?>
+                        <button type="submit" name="peanut_connect_generate_key" class="button button-primary">
+                            <?php echo esc_html__('Generate Site Key', 'peanut-connect'); ?>
+                        </button>
+                    </form>
+                <?php else: ?>
+                    <p><?php echo esc_html__('Copy this key and paste it in your Peanut Monitor dashboard to connect this site.', 'peanut-connect'); ?></p>
+                    <p>
+                        <code class="peanut-connect-key-display">
+                            <?php echo esc_html($site_key); ?>
+                        </code>
+                    </p>
+                    <form method="post" action="" class="peanut-connect-form-spaced">
+                        <?php wp_nonce_field('peanut_connect_regenerate_key'); ?>
+                        <button type="submit" name="peanut_connect_regenerate_key" class="button">
+                            <?php echo esc_html__('Regenerate Key', 'peanut-connect'); ?>
+                        </button>
+                        <button type="submit" name="peanut_connect_disconnect" class="button peanut-connect-btn-disconnect">
+                            <?php echo esc_html__('Disconnect', 'peanut-connect'); ?>
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+
+            <div class="card">
+                <h2><?php echo esc_html__('Permissions', 'peanut-connect'); ?></h2>
+                <p><?php echo esc_html__('Control what the manager site can do on this site.', 'peanut-connect'); ?></p>
+                <form method="post" action="options.php">
+                    <?php settings_fields('peanut_connect'); ?>
+                    <table class="form-table">
+                        <tr>
+                            <th><?php echo esc_html__('Health Checks', 'peanut-connect'); ?></th>
+                            <td>
+                                <input type="checkbox" checked disabled>
+                                <span class="description"><?php echo esc_html__('Always allowed - view site health status', 'peanut-connect'); ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php echo esc_html__('List Updates', 'peanut-connect'); ?></th>
+                            <td>
+                                <input type="checkbox" checked disabled>
+                                <span class="description"><?php echo esc_html__('Always allowed - view available updates', 'peanut-connect'); ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php echo esc_html__('Perform Updates', 'peanut-connect'); ?></th>
+                            <td>
+                                <input type="checkbox" name="peanut_connect_permissions[perform_updates]" value="1" <?php checked($permissions['perform_updates'] ?? false); ?>>
+                                <span class="description"><?php echo esc_html__('Allow manager to install plugin/theme updates', 'peanut-connect'); ?></span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php echo esc_html__('Access Analytics', 'peanut-connect'); ?></th>
+                            <td>
+                                <input type="checkbox" name="peanut_connect_permissions[access_analytics]" value="1" <?php checked($permissions['access_analytics'] ?? false); ?>>
+                                <span class="description"><?php echo esc_html__('Share Peanut Suite analytics data with manager', 'peanut-connect'); ?></span>
+                            </td>
+                        </tr>
+                    </table>
+                    <?php submit_button(__('Save Permissions', 'peanut-connect')); ?>
+                </form>
+            </div>
+
+            <?php if ($this->has_peanut_suite()): ?>
+            <div class="card">
+                <h2><?php echo esc_html__('Peanut Suite Integration', 'peanut-connect'); ?></h2>
+                <p class="peanut-connect-status-connected">
+                    <span class="dashicons dashicons-yes-alt"></span>
+                    <?php echo esc_html__('Peanut Suite detected. Analytics data will be synced with your manager site.', 'peanut-connect'); ?>
+                </p>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+
+        // Handle form submissions
+        $this->handle_form_submissions();
+    }
+
+    /**
+     * Handle form submissions
+     */
+    private function handle_form_submissions(): void {
+        if (isset($_POST['peanut_connect_generate_key']) && wp_verify_nonce($_POST['_wpnonce'], 'peanut_connect_generate_key')) {
+            $this->generate_site_key();
+            wp_safe_redirect(admin_url('options-general.php?page=peanut-connect&generated=1'));
+            exit;
+        }
+
+        if (isset($_POST['peanut_connect_regenerate_key']) && wp_verify_nonce($_POST['_wpnonce'], 'peanut_connect_regenerate_key')) {
+            $this->generate_site_key();
+            wp_safe_redirect(admin_url('options-general.php?page=peanut-connect&regenerated=1'));
+            exit;
+        }
+
+        if (isset($_POST['peanut_connect_disconnect']) && wp_verify_nonce($_POST['_wpnonce'], 'peanut_connect_regenerate_key')) {
+            $this->disconnect();
+            wp_safe_redirect(admin_url('options-general.php?page=peanut-connect&disconnected=1'));
+            exit;
+        }
+    }
+
+    /**
+     * Generate a new site key
+     */
+    public function generate_site_key(): string {
+        $site_key = wp_generate_password(64, false);
+        update_option('peanut_connect_site_key', $site_key);
+        return $site_key;
+    }
+
+    /**
+     * Disconnect from manager
+     */
+    public function disconnect(): void {
+        delete_option('peanut_connect_site_key');
+        delete_option('peanut_connect_manager_url');
+        delete_option('peanut_connect_last_sync');
+    }
+
+    /**
+     * Check if Peanut Suite is installed
+     */
+    public function has_peanut_suite(): bool {
+        return function_exists('peanut_is_module_active');
+    }
+
+    /**
+     * Get Peanut Suite data
+     */
+    public function get_peanut_suite_data(): ?array {
+        if (!$this->has_peanut_suite()) {
+            return null;
+        }
+
+        return [
+            'installed' => true,
+            'version' => defined('PEANUT_VERSION') ? PEANUT_VERSION : 'unknown',
+            'modules' => function_exists('peanut_get_active_modules') ? peanut_get_active_modules() : [],
+        ];
+    }
+
+    /**
+     * Add settings link to plugins page
+     */
+    public function add_settings_link(array $links): array {
+        $settings_link = '<a href="' . admin_url('admin.php?page=peanut-connect-app') . '">' . __('Settings', 'peanut-connect') . '</a>';
+        array_unshift($links, $settings_link);
+        return $links;
+    }
+}
+
+/**
+ * Initialize plugin
+ *
+ * Uses 'init' hook instead of 'plugins_loaded' to ensure translations
+ * are properly loaded before any translation functions are called.
+ * WordPress 6.7+ enforces strict timing on textdomain loading.
+ */
+function peanut_connect_init(): Peanut_Connect {
+    // Load textdomain first
+    load_plugin_textdomain(
+        'peanut-connect',
+        false,
+        dirname(plugin_basename(__FILE__)) . '/languages'
+    );
+
+    return Peanut_Connect::get_instance();
+}
+add_action('init', 'peanut_connect_init', 0);
+
+/**
+ * Activation hook
+ */
+register_activation_hook(__FILE__, function() {
+    // Generate site key on activation if not exists
+    if (!get_option('peanut_connect_site_key')) {
+        $key = wp_generate_password(64, false);
+        update_option('peanut_connect_site_key', $key);
+    }
+
+    // Set default permissions
+    if (!get_option('peanut_connect_permissions')) {
+        update_option('peanut_connect_permissions', [
+            'health_check' => true,
+            'list_updates' => true,
+            'perform_updates' => true,
+            'access_analytics' => true,
+        ]);
+    }
+});
+
+/**
+ * Deactivation hook
+ */
+register_deactivation_hook(__FILE__, function() {
+    // Optionally notify manager of disconnection
+});

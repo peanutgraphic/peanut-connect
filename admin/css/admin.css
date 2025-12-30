@@ -1,0 +1,56 @@
+/**
+ * Peanut Connect Admin Styles
+ *
+ * Version: 1.0.1
+ */
+
+/* ==========================================================================
+   CSS Variables
+   ========================================================================== */
+:root {
+    --peanut-connect-success: #22c55e;
+    --peanut-connect-warning: #f59e0b;
+    --peanut-connect-danger: #b32d2e;
+    --peanut-connect-gray-100: #f0f0f0;
+    --peanut-connect-gray-200: #e2e8f0;
+}
+
+/* ==========================================================================
+   Status Messages
+   ========================================================================== */
+.peanut-connect-status-connected {
+    color: var(--peanut-connect-success);
+}
+
+.peanut-connect-status-disconnected {
+    color: var(--peanut-connect-warning);
+}
+
+/* ==========================================================================
+   Site Key Display
+   ========================================================================== */
+.peanut-connect-key-display {
+    display: block;
+    padding: 10px;
+    background: var(--peanut-connect-gray-100);
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ==========================================================================
+   Button Styles
+   ========================================================================== */
+.peanut-connect-btn-disconnect {
+    color: var(--peanut-connect-danger);
+}
+
+.peanut-connect-btn-disconnect:hover {
+    color: #8a1c1d;
+}
+
+/* ==========================================================================
+   Form Spacing
+   ========================================================================== */
+.peanut-connect-form-spaced {
+    margin-top: 10px;
+}

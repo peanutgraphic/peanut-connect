@@ -1,0 +1,27 @@
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Build output (keep dist for deployment)
+# assets/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local env
+.env.local
+.env.*.local
+
+# Claude local settings
+.claude/settings.local.json

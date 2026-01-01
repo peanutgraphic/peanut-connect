@@ -198,14 +198,16 @@ class ErrorLogTest extends TestCase {
      * Test handle_error includes user ID
      */
     public function test_handle_error_includes_user_id(): void {
+        // Use E_WARNING instead of E_NOTICE as it's more likely to be in error_reporting
         Peanut_Connect_Error_Log::handle_error(
-            E_NOTICE,
+            E_WARNING,
             'Test message',
             '/test/file.php',
             1
         );
 
         $entries = Peanut_Connect_Error_Log::get_entries();
+        $this->assertNotEmpty($entries, 'Expected error entries to be captured');
         $this->assertArrayHasKey('user_id', $entries[0]);
         $this->assertEquals(1, $entries[0]['user_id']);
     }

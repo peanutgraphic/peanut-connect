@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import Input from './Input';
 import { Search, Eye } from 'lucide-react';
 
@@ -23,13 +22,12 @@ describe('Input', () => {
     expect(screen.getByDisplayValue('test value')).toBeInTheDocument();
   });
 
-  it('calls onChange when typing', async () => {
+  it('calls onChange when typing', () => {
     const handleChange = vi.fn();
-    const user = userEvent.setup();
 
     render(<Input onChange={handleChange} />);
 
-    await user.type(screen.getByRole('textbox'), 'hello');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } });
 
     expect(handleChange).toHaveBeenCalled();
   });

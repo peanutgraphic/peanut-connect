@@ -15,12 +15,12 @@ class Peanut_Connect_Error_Log {
     /**
      * Log file path
      */
-    private static string $log_file;
+    private static string $log_file = '';
 
     /**
      * Log directory path
      */
-    private static string $log_dir;
+    private static string $log_dir = '';
 
     /**
      * Maximum log entries to keep
@@ -173,6 +173,11 @@ class Peanut_Connect_Error_Log {
      * Log an entry to the file
      */
     private static function log_entry(array $entry): void {
+        // Don't log if not initialized
+        if (empty(self::$log_file)) {
+            return;
+        }
+
         $entries = self::get_entries();
 
         // Add new entry at the beginning
@@ -193,7 +198,8 @@ class Peanut_Connect_Error_Log {
      * Get all log entries
      */
     public static function get_entries(int $limit = 0, int $offset = 0): array {
-        if (!file_exists(self::$log_file)) {
+        // Return empty if not initialized
+        if (empty(self::$log_file) || !file_exists(self::$log_file)) {
             return [];
         }
 
@@ -288,6 +294,10 @@ class Peanut_Connect_Error_Log {
      * Clear all log entries
      */
     public static function clear(): bool {
+        // Return true if not initialized (nothing to clear)
+        if (empty(self::$log_file)) {
+            return true;
+        }
         if (file_exists(self::$log_file)) {
             return @unlink(self::$log_file);
         }

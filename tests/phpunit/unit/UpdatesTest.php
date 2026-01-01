@@ -144,11 +144,15 @@ class UpdatesTest extends TestCase {
     public function test_core_update_structure(): void {
         $updates = Peanut_Connect_Updates::get_available_updates();
 
+        // Core is either null (no update) or has required keys
         if ($updates['core'] !== null) {
             $this->assertArrayHasKey('current_version', $updates['core']);
             $this->assertArrayHasKey('new_version', $updates['core']);
             $this->assertArrayHasKey('locale', $updates['core']);
             $this->assertArrayHasKey('package', $updates['core']);
+        } else {
+            // Core is null, which is a valid state (no update available)
+            $this->assertNull($updates['core']);
         }
     }
 

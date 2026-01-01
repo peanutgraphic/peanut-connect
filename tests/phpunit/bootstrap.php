@@ -37,6 +37,19 @@ if (!defined('HOUR_IN_SECONDS')) {
     define('HOUR_IN_SECONDS', 3600);
 }
 
+// Database constants
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+
+if (!defined('ARRAY_N')) {
+    define('ARRAY_N', 'ARRAY_N');
+}
+
+if (!defined('OBJECT')) {
+    define('OBJECT', 'OBJECT');
+}
+
 // Storage for mocked options and transients
 global $peanut_test_options, $peanut_test_transients;
 $peanut_test_options = [];
@@ -539,6 +552,26 @@ if (!function_exists('wp_generate_uuid4')) {
 }
 
 /**
+ * Mock wp_generate_password
+ */
+if (!function_exists('wp_generate_password')) {
+    function wp_generate_password(int $length = 12, bool $special_chars = true, bool $extra_special_chars = false): string {
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        if ($special_chars) {
+            $chars .= '!@#$%^&*()';
+        }
+        if ($extra_special_chars) {
+            $chars .= '-_[]{}<>~`+=,.;:/?|';
+        }
+        $password = '';
+        for ($i = 0; $i < $length; $i++) {
+            $password .= $chars[mt_rand(0, strlen($chars) - 1)];
+        }
+        return $password;
+    }
+}
+
+/**
  * Mock register_rest_route
  */
 if (!function_exists('register_rest_route')) {
@@ -654,10 +687,110 @@ if (!function_exists('get_plugin_data')) {
 }
 
 /**
+ * Mock get_bloginfo
+ */
+if (!function_exists('get_bloginfo')) {
+    function get_bloginfo(string $show = '', string $filter = 'raw'): string {
+        $data = [
+            'name' => 'Test Site',
+            'description' => 'Just another WordPress site',
+            'wpurl' => 'https://example.com',
+            'url' => 'https://example.com',
+            'admin_email' => 'admin@example.com',
+            'version' => '6.4.0',
+            'charset' => 'UTF-8',
+            'language' => 'en-US',
+        ];
+        return $data[$show] ?? '';
+    }
+}
+
+/**
  * Define WP_PLUGIN_DIR if not defined
  */
 if (!defined('WP_PLUGIN_DIR')) {
     define('WP_PLUGIN_DIR', PEANUT_CONNECT_PLUGIN_DIR);
+}
+
+/**
+ * Create mock wp-admin directories and files for testing
+ * These files are required by class-connect-updates.php
+ */
+$wp_admin_dir = ABSPATH . 'wp-admin/includes/';
+if (!is_dir($wp_admin_dir)) {
+    @mkdir($wp_admin_dir, 0755, true);
+}
+
+// Create mock update.php
+if (!file_exists($wp_admin_dir . 'update.php')) {
+    @file_put_contents($wp_admin_dir . 'update.php', '<?php // Mock update.php');
+}
+
+// Create mock plugin.php
+if (!file_exists($wp_admin_dir . 'plugin.php')) {
+    @file_put_contents($wp_admin_dir . 'plugin.php', '<?php // Mock plugin.php');
+}
+
+// Create mock file.php
+if (!file_exists($wp_admin_dir . 'file.php')) {
+    @file_put_contents($wp_admin_dir . 'file.php', '<?php // Mock file.php');
+}
+
+// Create mock class-wp-upgrader.php with upgrader classes
+if (!file_exists($wp_admin_dir . 'class-wp-upgrader.php')) {
+    $upgrader_content = <<<'PHP'
+<?php
+// Mock WordPress Upgrader classes for testing
+
+if (!class_exists('Automatic_Upgrader_Skin')) {
+    class Automatic_Upgrader_Skin {
+        public function __construct($args = array()) {}
+        public function feedback($string, ...$args) {}
+        public function header() {}
+        public function footer() {}
+        public function error($errors) {}
+        public function set_result($result) { return $result; }
+    }
+}
+
+if (!class_exists('WP_Upgrader')) {
+    class WP_Upgrader {
+        public $skin;
+        public $result;
+        public function __construct($skin = null) {
+            $this->skin = $skin ?: new Automatic_Upgrader_Skin();
+        }
+    }
+}
+
+if (!class_exists('Plugin_Upgrader')) {
+    class Plugin_Upgrader extends WP_Upgrader {
+        public function upgrade($plugin, $args = array()) {
+            // Return mock success
+            return true;
+        }
+    }
+}
+
+if (!class_exists('Theme_Upgrader')) {
+    class Theme_Upgrader extends WP_Upgrader {
+        public function upgrade($theme, $args = array()) {
+            // Return mock success
+            return true;
+        }
+    }
+}
+
+if (!class_exists('Core_Upgrader')) {
+    class Core_Upgrader extends WP_Upgrader {
+        public function upgrade($current, $args = array()) {
+            // Return mock success
+            return true;
+        }
+    }
+}
+PHP;
+    @file_put_contents($wp_admin_dir . 'class-wp-upgrader.php', $upgrader_content);
 }
 
 // Load the plugin classes

@@ -9,6 +9,8 @@ use PHPUnit\Framework\TestCase;
 
 class ErrorLogTest extends TestCase {
 
+    private int $original_error_reporting;
+
     /**
      * Set up test environment
      */
@@ -18,11 +20,15 @@ class ErrorLogTest extends TestCase {
         // Enable error logging
         update_option('peanut_connect_error_logging', true);
 
-        // Initialize the error log
+        // Initialize the error log FIRST (sets up log_file property)
         Peanut_Connect_Error_Log::init();
 
         // Clear any existing entries
         Peanut_Connect_Error_Log::clear();
+
+        // Save original and set error_reporting to include all errors for testing
+        $this->original_error_reporting = error_reporting();
+        error_reporting(E_ALL);
     }
 
     /**
@@ -31,6 +37,9 @@ class ErrorLogTest extends TestCase {
     protected function tearDown(): void {
         // Clear the log file
         Peanut_Connect_Error_Log::clear();
+
+        // Restore original error_reporting
+        error_reporting($this->original_error_reporting);
     }
 
     // =========================================
@@ -380,6 +389,11 @@ class ErrorLogTest extends TestCase {
         );
 
         $entries = Peanut_Connect_Error_Log::get_entries();
+
+        // Ensure we captured the error
+        $this->assertNotEmpty($entries, 'Error log should capture the E_WARNING');
+        $this->assertArrayHasKey('file', $entries[0], 'Entry should have file key');
+        $this->assertNotNull($entries[0]['file'], 'File should not be null');
 
         // Path should have ABSPATH replaced with /
         $this->assertStringContainsString('wp-content/plugins/test/file.php', $entries[0]['file']);

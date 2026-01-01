@@ -2,7 +2,8 @@
 frontend/node_modules/
 node_modules/
 
-# Build output (keep dist for deployment)
+# Build output
+/dist/
 # assets/dist/
 
 # IDE

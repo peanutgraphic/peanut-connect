@@ -1,0 +1,773 @@
+openapi: 3.0.3
+info:
+  title: Peanut Connect API
+  description: |
+    REST API for Peanut Connect WordPress plugin.
+
+    ## Authentication
+
+    Peanut Connect uses two authentication methods:
+
+    1. **Bearer Token** (for manager site communication):
+       - Use the site key as a Bearer token in the Authorization header
+       - Example: `Authorization: Bearer your-64-char-site-key`
+
+    2. **WordPress Cookie + Nonce** (for admin panel):
+       - Uses WordPress's built-in cookie authentication
+       - Include `X-WP-Nonce` header with requests
+
+    ## Rate Limiting
+
+    API endpoints are rate limited to prevent abuse:
+    - Authentication endpoints: 10 requests/minute
+    - Health/Updates endpoints: 30 requests/minute
+    - Default: 60 requests/minute
+
+    Rate limit headers are included in responses:
+    - `X-RateLimit-Limit`: Maximum requests allowed
+    - `X-RateLimit-Remaining`: Requests remaining in window
+    - `X-RateLimit-Reset`: Unix timestamp when limit resets
+
+  version: 2.1.3
+  contact:
+    name: Peanut Graphic
+    url: https://peanutgraphic.com
+  license:
+    name: GPL-2.0-or-later
+    url: https://www.gnu.org/licenses/gpl-2.0.html
+
+servers:
+  - url: /wp-json/peanut-connect/v1
+    description: WordPress REST API
+
+tags:
+  - name: Manager
+    description: Endpoints for manager site communication (Bearer token auth)
+  - name: Admin
+    description: Endpoints for admin panel (WordPress cookie auth)
+  - name: Error Log
+    description: Error log management endpoints
+
+paths:
+  # Manager Endpoints
+  /verify:
+    get:
+      tags: [Manager]
+      summary: Verify connection
+      description: Verify the site key and return site information
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Connection verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /health:
+    get:
+      tags: [Manager]
+      summary: Get site health data
+      description: Returns comprehensive health information about the WordPress installation
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Health data retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /updates:
+    get:
+      tags: [Manager]
+      summary: Get available updates
+      description: Returns list of available plugin, theme, and core updates
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Updates retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailableUpdates'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /update:
+    post:
+      tags: [Manager]
+      summary: Perform an update
+      description: Install a plugin, theme, or core update
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, slug]
+              properties:
+                type:
+                  type: string
+                  enum: [plugin, theme, core]
+                slug:
+                  type: string
+                  description: Plugin/theme slug or 'wordpress' for core
+      responses:
+        '200':
+          description: Update performed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateResult'
+        '400':
+          description: Update failed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Permission denied (perform_updates not enabled)
+
+  /analytics:
+    get:
+      tags: [Manager]
+      summary: Get Peanut Suite analytics
+      description: Returns analytics data if Peanut Suite is installed
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+          description: Number of days to include
+      responses:
+        '200':
+          description: Analytics data retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Permission denied (access_analytics not enabled)
+        '404':
+          description: Peanut Suite not installed
+
+  /disconnect:
+    post:
+      tags: [Manager]
+      summary: Disconnect from manager
+      description: Notify child site of disconnection from manager
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Disconnected successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Admin Endpoints
+  /settings:
+    get:
+      tags: [Admin]
+      summary: Get settings
+      description: Get current connection settings and permissions
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Settings retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /settings/permissions:
+    post:
+      tags: [Admin]
+      summary: Update permissions
+      description: Update what actions the manager site can perform
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Permissions'
+      responses:
+        '200':
+          description: Permissions updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permissions'
+
+  /settings/generate-key:
+    post:
+      tags: [Admin]
+      summary: Generate site key
+      description: Generate a new site key (only if none exists)
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Key generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  site_key:
+                    type: string
+        '400':
+          description: Key already exists
+
+  /settings/regenerate-key:
+    post:
+      tags: [Admin]
+      summary: Regenerate site key
+      description: Generate a new site key (invalidates existing connections)
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Key regenerated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  site_key:
+                    type: string
+
+  /settings/disconnect:
+    post:
+      tags: [Admin]
+      summary: Disconnect from manager
+      description: Clear site key and disconnect from manager
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Disconnected successfully
+
+  /dashboard:
+    get:
+      tags: [Admin]
+      summary: Get dashboard data
+      description: Get combined data for dashboard display
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Dashboard data retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+
+  /admin/health:
+    get:
+      tags: [Admin]
+      summary: Get health data (admin)
+      description: Get health data for admin panel display
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Health data retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthData'
+
+  /admin/updates:
+    get:
+      tags: [Admin]
+      summary: Get updates (admin)
+      description: Get available updates for admin panel display
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Updates retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailableUpdates'
+
+  /admin/update:
+    post:
+      tags: [Admin]
+      summary: Perform update (admin)
+      description: Install an update from the admin panel
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, slug]
+              properties:
+                type:
+                  type: string
+                  enum: [plugin, theme, core]
+                slug:
+                  type: string
+      responses:
+        '200':
+          description: Update performed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateResult'
+        '400':
+          description: Update failed
+
+  # Error Log Endpoints
+  /errors:
+    get:
+      tags: [Error Log]
+      summary: Get error log entries
+      description: Retrieve PHP errors captured by the error logger
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [critical, error, warning, notice]
+      responses:
+        '200':
+          description: Error log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorLogData'
+
+  /errors/counts:
+    get:
+      tags: [Error Log]
+      summary: Get error counts
+      description: Get error counts by level
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Error counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorCountsData'
+
+  /errors/clear:
+    post:
+      tags: [Error Log]
+      summary: Clear error log
+      description: Delete all error log entries
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Error log cleared
+
+  /errors/export:
+    get:
+      tags: [Error Log]
+      summary: Export error log
+      description: Export error log as CSV
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: CSV export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csv:
+                    type: string
+                  filename:
+                    type: string
+
+  /errors/settings:
+    put:
+      tags: [Error Log]
+      summary: Update error log settings
+      description: Enable or disable error logging
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Settings updated
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Site key as Bearer token
+    cookieAuth:
+      type: apiKey
+      in: header
+      name: X-WP-Nonce
+      description: WordPress REST API nonce
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: string
+                example: rate_limit_exceeded
+              message:
+                type: string
+
+  schemas:
+    VerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        site_name:
+          type: string
+        site_url:
+          type: string
+        wp_version:
+          type: string
+        permissions:
+          $ref: '#/components/schemas/Permissions'
+        peanut_suite:
+          $ref: '#/components/schemas/PeanutSuiteInfo'
+        health:
+          type: object
+
+    Permissions:
+      type: object
+      properties:
+        health_check:
+          type: boolean
+          default: true
+        list_updates:
+          type: boolean
+          default: true
+        perform_updates:
+          type: boolean
+        access_analytics:
+          type: boolean
+
+    PeanutSuiteInfo:
+      type: object
+      nullable: true
+      properties:
+        installed:
+          type: boolean
+        version:
+          type: string
+        modules:
+          type: array
+          items:
+            type: string
+
+    HealthData:
+      type: object
+      properties:
+        wp_version:
+          type: object
+          properties:
+            version:
+              type: string
+            latest_version:
+              type: string
+            needs_update:
+              type: boolean
+        php_version:
+          type: object
+          properties:
+            version:
+              type: string
+            recommended:
+              type: boolean
+            minimum_met:
+              type: boolean
+        ssl:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            valid:
+              type: boolean
+            days_until_expiry:
+              type: integer
+              nullable: true
+            issuer:
+              type: string
+              nullable: true
+        plugins:
+          type: object
+        themes:
+          type: object
+        disk_space:
+          type: object
+        database:
+          type: object
+        debug_mode:
+          type: boolean
+        server:
+          type: object
+        peanut_suite:
+          $ref: '#/components/schemas/PeanutSuiteInfo'
+
+    AvailableUpdates:
+      type: object
+      properties:
+        plugins:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginUpdate'
+        themes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThemeUpdate'
+        core:
+          $ref: '#/components/schemas/CoreUpdate'
+
+    PluginUpdate:
+      type: object
+      properties:
+        slug:
+          type: string
+        file:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        new_version:
+          type: string
+
+    ThemeUpdate:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        new_version:
+          type: string
+
+    CoreUpdate:
+      type: object
+      nullable: true
+      properties:
+        current_version:
+          type: string
+        new_version:
+          type: string
+
+    UpdateResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        new_version:
+          type: string
+
+    AnalyticsData:
+      type: object
+      properties:
+        success:
+          type: boolean
+        period:
+          type: string
+        data:
+          type: object
+          properties:
+            contacts:
+              type: integer
+            utm_clicks:
+              type: integer
+            link_clicks:
+              type: integer
+            forms_submitted:
+              type: integer
+
+    Settings:
+      type: object
+      properties:
+        connection:
+          type: object
+          properties:
+            connected:
+              type: boolean
+            manager_url:
+              type: string
+              nullable: true
+            last_sync:
+              type: string
+              nullable: true
+            site_key:
+              type: string
+              nullable: true
+        permissions:
+          $ref: '#/components/schemas/Permissions'
+        peanut_suite:
+          $ref: '#/components/schemas/PeanutSuiteInfo'
+
+    DashboardData:
+      type: object
+      properties:
+        connection:
+          type: object
+        health_summary:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, warning, critical]
+            issues:
+              type: array
+              items:
+                type: string
+        updates:
+          type: object
+          properties:
+            plugins:
+              type: integer
+            themes:
+              type: integer
+            core:
+              type: boolean
+        peanut_suite:
+          $ref: '#/components/schemas/PeanutSuiteInfo'
+
+    ErrorLogEntry:
+      type: object
+      properties:
+        type:
+          type: string
+        level:
+          type: string
+          enum: [critical, error, warning, notice]
+        message:
+          type: string
+        file:
+          type: string
+        line:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        url:
+          type: string
+        user_id:
+          type: integer
+
+    ErrorLogData:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorLogEntry'
+        counts:
+          $ref: '#/components/schemas/ErrorCounts'
+        logging_enabled:
+          type: boolean
+
+    ErrorCounts:
+      type: object
+      properties:
+        critical:
+          type: integer
+        error:
+          type: integer
+        warning:
+          type: integer
+        notice:
+          type: integer
+        total:
+          type: integer
+
+    ErrorCountsData:
+      type: object
+      properties:
+        all_time:
+          $ref: '#/components/schemas/ErrorCounts'
+        last_24h:
+          $ref: '#/components/schemas/ErrorCounts'
+        logging_enabled:
+          type: boolean

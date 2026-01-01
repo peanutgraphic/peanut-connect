@@ -53,6 +53,8 @@ final class Peanut_Connect {
      * Load required files
      */
     private function load_dependencies(): void {
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-rate-limiter.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-activity-log.php';
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-auth.php';
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-health.php';
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-updates.php';
@@ -60,7 +62,8 @@ final class Peanut_Connect {
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-api.php';
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-self-updater.php';
 
-        // Initialize error logging early
+        // Initialize logging early
+        Peanut_Connect_Activity_Log::init();
         Peanut_Connect_Error_Log::init();
 
         // Initialize self-updater early so update check filter is registered

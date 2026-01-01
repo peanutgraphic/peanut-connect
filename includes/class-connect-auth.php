@@ -2,7 +2,11 @@
 /**
  * Peanut Connect Authentication
  *
- * Handles request verification from manager sites.
+ * Handles request verification from manager sites with rate limiting
+ * to prevent brute force attacks and API abuse.
+ *
+ * @package Peanut_Connect
+ * @since 1.0.0
  */
 
 if (!defined('ABSPATH')) {
@@ -13,8 +17,23 @@ class Peanut_Connect_Auth {
 
     /**
      * Verify incoming request from manager
+     *
+     * Performs rate limiting check before authentication to prevent
+     * brute force attacks. Uses timing-safe comparison for key validation.
+     *
+     * @param WP_REST_Request $request The incoming REST request
+     * @param string          $endpoint Optional endpoint identifier for rate limiting
+     * @return bool|WP_Error True if authenticated, WP_Error on failure
      */
-    public static function verify_request(WP_REST_Request $request): bool|WP_Error {
+    public static function verify_request(WP_REST_Request $request, string $endpoint = 'default'): bool|WP_Error {
+        // Check rate limit first (before any authentication logic)
+        $client_id = Peanut_Connect_Rate_Limiter::get_client_identifier($request);
+        $rate_check = Peanut_Connect_Rate_Limiter::check($client_id, $endpoint);
+
+        if (is_wp_error($rate_check)) {
+            return $rate_check;
+        }
+
         $auth_header = $request->get_header('Authorization');
 
         if (empty($auth_header)) {
@@ -67,6 +86,29 @@ class Peanut_Connect_Auth {
     }
 
     /**
+     * Add rate limit headers to REST response
+     *
+     * @param WP_REST_Response $response The response object
+     * @param WP_REST_Request  $request  The request object
+     * @param string           $endpoint Endpoint identifier
+     * @return WP_REST_Response Modified response with rate limit headers
+     */
+    public static function add_rate_limit_headers(
+        WP_REST_Response $response,
+        WP_REST_Request $request,
+        string $endpoint = 'default'
+    ): WP_REST_Response {
+        $client_id = Peanut_Connect_Rate_Limiter::get_client_identifier($request);
+        $headers = Peanut_Connect_Rate_Limiter::get_headers($client_id, $endpoint);
+
+        foreach ($headers as $name => $value) {
+            $response->header($name, $value);
+        }
+
+        return $response;
+    }
+
+    /**
      * Check if a specific permission is allowed
      */
     public static function has_permission(string $permission): bool {
@@ -94,17 +136,39 @@ class Peanut_Connect_Auth {
 
     /**
      * Permission callback for REST endpoints
+     *
+     * Creates a permission callback with rate limiting for the specified endpoint.
+     *
+     * @param WP_REST_Request $request The REST request
+     * @return bool|WP_Error True if authorized, WP_Error on failure
      */
     public static function permission_callback(WP_REST_Request $request): bool|WP_Error {
-        return self::verify_request($request);
+        // Extract endpoint from route for rate limiting
+        $route = $request->get_route();
+        $endpoint = self::extract_endpoint_from_route($route);
+
+        return self::verify_request($request, $endpoint);
     }
 
     /**
      * Permission callback requiring specific permission
+     *
+     * Creates a closure that verifies both authentication and specific permission.
+     * Includes rate limiting based on the permission type.
+     *
+     * @param string $permission The required permission
+     * @return callable Permission callback function
      */
     public static function permission_callback_for(string $permission): callable {
         return function(WP_REST_Request $request) use ($permission): bool|WP_Error {
-            $verified = self::verify_request($request);
+            // Map permissions to endpoints for rate limiting
+            $endpoint_map = [
+                'perform_updates' => 'update',
+                'access_analytics' => 'analytics',
+            ];
+            $endpoint = $endpoint_map[$permission] ?? 'default';
+
+            $verified = self::verify_request($request, $endpoint);
 
             if (is_wp_error($verified)) {
                 return $verified;
@@ -120,5 +184,34 @@ class Peanut_Connect_Auth {
 
             return true;
         };
+    }
+
+    /**
+     * Extract endpoint identifier from REST route
+     *
+     * @param string $route The REST route path
+     * @return string Endpoint identifier for rate limiting
+     */
+    private static function extract_endpoint_from_route(string $route): string {
+        // Remove namespace prefix
+        $route = str_replace('/peanut-connect/v1/', '', $route);
+
+        // Map routes to endpoint identifiers
+        $endpoint_map = [
+            'verify' => 'verify',
+            'health' => 'health',
+            'updates' => 'updates',
+            'update' => 'update',
+            'analytics' => 'analytics',
+            'disconnect' => 'disconnect',
+        ];
+
+        foreach ($endpoint_map as $pattern => $endpoint) {
+            if (str_starts_with($route, $pattern)) {
+                return $endpoint;
+            }
+        }
+
+        return 'default';
     }
 }

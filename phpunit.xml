@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd"
+    bootstrap="tests/phpunit/bootstrap.php"
+    colors="true"
+    cacheDirectory=".phpunit.cache"
+    executionOrder="random"
+    failOnRisky="true"
+    failOnWarning="true"
+    stopOnFailure="false"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/phpunit/unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage>
+        <include>
+            <directory suffix=".php">includes</directory>
+            <file>peanut-connect.php</file>
+        </include>
+        <report>
+            <html outputDirectory="tests/coverage"/>
+            <text outputFile="php://stdout"/>
+        </report>
+    </coverage>
+
+    <php>
+        <const name="ABSPATH" value="/tmp/wordpress/"/>
+        <const name="WP_CONTENT_DIR" value="/tmp/wordpress/wp-content/"/>
+        <const name="PEANUT_CONNECT_TESTING" value="true"/>
+    </php>
+</phpunit>

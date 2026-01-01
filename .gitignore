@@ -1,6 +1,7 @@
 # Dependencies
 frontend/node_modules/
 node_modules/
+vendor/
 
 # Build output
 /dist/
@@ -26,3 +27,11 @@ npm-debug.log*
 
 # Claude local settings
 .claude/settings.local.json
+
+# Test coverage
+tests/coverage/
+frontend/coverage/
+.phpunit.cache/
+
+# Composer
+composer.lock

@@ -6,6 +6,7 @@ export { default as Modal, ConfirmModal } from './Modal';
 export { default as Badge, StatusBadge } from './Badge';
 export { default as Switch } from './Switch';
 export { default as ToastProvider, useToast } from './Toast';
+export { ErrorBoundary, ErrorBoundaryWrapper } from './ErrorBoundary';
 
 // Enhanced UI Components
 export { Tooltip, HelpTooltip } from './Tooltip';

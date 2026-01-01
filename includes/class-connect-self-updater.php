@@ -167,17 +167,35 @@ class Peanut_Connect_Self_Updater {
 
     /**
      * Clear update cache
+     *
+     * Removes all cached update information including version-specific
+     * transients. Uses parameterized queries for security.
      */
     public function clear_update_cache(): void {
         delete_site_transient('update_plugins');
 
-        // Clear version-specific caches
+        // Clear version-specific caches using parameterized LIKE patterns
         global $wpdb;
+
+        // Use $wpdb->esc_like() to properly escape the LIKE pattern
+        // Then use $wpdb->prepare() to parameterize the full query
+        $transient_pattern = $wpdb->esc_like('_transient_peanut_connect_update_') . '%';
+        $timeout_pattern = $wpdb->esc_like('_transient_timeout_peanut_connect_update_') . '%';
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $wpdb->query(
-            "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_peanut_connect_update_%'"
+            $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $transient_pattern
+            )
         );
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         $wpdb->query(
-            "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_peanut_connect_update_%'"
+            $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $timeout_pattern
+            )
         );
     }
 

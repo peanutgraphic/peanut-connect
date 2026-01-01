@@ -150,6 +150,57 @@ class Peanut_Connect_API {
         ]);
 
         // =====================
+        // Activity Log endpoints
+        // =====================
+
+        // Get activity log entries
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/activity', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_activity_log'],
+            'permission_callback' => [$this, 'admin_permission_check'],
+            'args' => [
+                'limit' => [
+                    'type' => 'integer',
+                    'default' => 50,
+                    'minimum' => 1,
+                    'maximum' => 500,
+                ],
+                'offset' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'type' => [
+                    'type' => 'string',
+                ],
+                'status' => [
+                    'type' => 'string',
+                    'enum' => ['success', 'warning', 'error', 'info', ''],
+                ],
+            ],
+        ]);
+
+        // Get activity counts
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/activity/counts', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_activity_counts'],
+            'permission_callback' => [$this, 'admin_permission_check'],
+        ]);
+
+        // Clear activity log
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/activity/clear', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'clear_activity_log'],
+            'permission_callback' => [$this, 'admin_permission_check'],
+        ]);
+
+        // Export activity log
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/activity/export', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'export_activity_log'],
+            'permission_callback' => [$this, 'admin_permission_check'],
+        ]);
+
+        // =====================
         // Manager endpoints (require Bearer token)
         // =====================
         // Verify connection
@@ -438,6 +489,13 @@ class Peanut_Connect_API {
 
         update_option('peanut_connect_permissions', $updated);
 
+        // Log permission changes
+        foreach (['perform_updates', 'access_analytics'] as $perm) {
+            if ($current[$perm] !== $updated[$perm]) {
+                Peanut_Connect_Activity_Log::log_permission_changed($perm, $updated[$perm]);
+            }
+        }
+
         return new WP_REST_Response([
             'success' => true,
             'data' => $updated,
@@ -460,6 +518,9 @@ class Peanut_Connect_API {
         $site_key = wp_generate_password(64, false);
         update_option('peanut_connect_site_key', $site_key);
 
+        // Log activity
+        Peanut_Connect_Activity_Log::log_key_generated();
+
         return new WP_REST_Response([
             'success' => true,
             'data' => [
@@ -479,6 +540,9 @@ class Peanut_Connect_API {
         delete_option('peanut_connect_manager_url');
         delete_option('peanut_connect_last_sync');
 
+        // Log activity
+        Peanut_Connect_Activity_Log::log_key_regenerated();
+
         return new WP_REST_Response([
             'success' => true,
             'data' => [
@@ -494,6 +558,9 @@ class Peanut_Connect_API {
         delete_option('peanut_connect_site_key');
         delete_option('peanut_connect_manager_url');
         delete_option('peanut_connect_last_sync');
+
+        // Log activity
+        Peanut_Connect_Activity_Log::log_disconnect('admin');
 
         return new WP_REST_Response([
             'success' => true,
@@ -729,6 +796,76 @@ class Peanut_Connect_API {
             'success' => true,
             'data' => [
                 'logging_enabled' => get_option('peanut_connect_error_logging', true),
+            ],
+        ], 200);
+    }
+
+    // =====================
+    // Activity Log Handlers
+    // =====================
+
+    /**
+     * Get activity log entries
+     */
+    public function get_activity_log(WP_REST_Request $request): WP_REST_Response {
+        $limit = $request->get_param('limit') ?? 50;
+        $offset = $request->get_param('offset') ?? 0;
+        $type = $request->get_param('type') ?? '';
+        $status = $request->get_param('status') ?? '';
+
+        $entries = Peanut_Connect_Activity_Log::get_entries($limit, $offset, $type, $status);
+        $counts = Peanut_Connect_Activity_Log::get_recent_counts();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'entries' => $entries,
+                'counts' => $counts,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Get activity log counts
+     */
+    public function get_activity_counts(WP_REST_Request $request): WP_REST_Response {
+        $by_type = Peanut_Connect_Activity_Log::get_counts_by_type();
+        $recent = Peanut_Connect_Activity_Log::get_recent_counts();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'by_type' => $by_type,
+                'last_24h' => $recent,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Clear activity log
+     */
+    public function clear_activity_log(WP_REST_Request $request): WP_REST_Response {
+        $result = Peanut_Connect_Activity_Log::clear();
+
+        return new WP_REST_Response([
+            'success' => $result,
+            'message' => $result
+                ? __('Activity log cleared.', 'peanut-connect')
+                : __('Failed to clear activity log.', 'peanut-connect'),
+        ], $result ? 200 : 500);
+    }
+
+    /**
+     * Export activity log as CSV
+     */
+    public function export_activity_log(WP_REST_Request $request): WP_REST_Response {
+        $csv = Peanut_Connect_Activity_Log::export_csv();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'csv' => $csv,
+                'filename' => 'peanut-activity-log-' . date('Y-m-d') . '.csv',
             ],
         ], 200);
     }

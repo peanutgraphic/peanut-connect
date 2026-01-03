@@ -12,10 +12,32 @@ if (!defined('ABSPATH')) {
 class Peanut_Connect_Health {
 
     /**
-     * Get comprehensive health data
+     * Cache TTL for health data (30 seconds)
      */
-    public static function get_health_data(): array {
-        return [
+    private const HEALTH_CACHE_TTL = 30;
+
+    /**
+     * Cache TTL for SSL data (5 minutes)
+     */
+    private const SSL_CACHE_TTL = 300;
+
+    /**
+     * Get comprehensive health data (with caching)
+     *
+     * @param bool $force_refresh Force bypass cache
+     */
+    public static function get_health_data(bool $force_refresh = false): array {
+        $cache_key = 'peanut_connect_health';
+
+        // Check cache unless forced refresh
+        if (!$force_refresh) {
+            $cached = get_transient($cache_key);
+            if ($cached !== false) {
+                return $cached;
+            }
+        }
+
+        $data = [
             'wp_version' => self::get_wp_version_data(),
             'php_version' => self::get_php_version_data(),
             'ssl' => self::get_ssl_data(),
@@ -29,7 +51,21 @@ class Peanut_Connect_Health {
             'server' => self::get_server_data(),
             'peanut_suite' => self::get_peanut_suite_data(),
             'error_log' => self::get_error_log_data(),
+            '_cached_at' => current_time('mysql'),
         ];
+
+        // Cache the result
+        set_transient($cache_key, $data, self::HEALTH_CACHE_TTL);
+
+        return $data;
+    }
+
+    /**
+     * Invalidate health cache
+     */
+    public static function invalidate_cache(): void {
+        delete_transient('peanut_connect_health');
+        delete_transient('peanut_connect_ssl');
     }
 
     /**
@@ -70,9 +106,17 @@ class Peanut_Connect_Health {
     }
 
     /**
-     * Get SSL certificate data
+     * Get SSL certificate data (with caching)
      */
     private static function get_ssl_data(): array {
+        // Check cache first - SSL data is expensive to fetch
+        $cache_key = 'peanut_connect_ssl';
+        $cached = get_transient($cache_key);
+
+        if ($cached !== false) {
+            return $cached;
+        }
+
         $is_ssl = is_ssl();
         $data = [
             'enabled' => $is_ssl,
@@ -122,6 +166,9 @@ class Peanut_Connect_Health {
                 }
             }
         }
+
+        // Cache SSL data for 5 minutes
+        set_transient($cache_key, $data, self::SSL_CACHE_TTL);
 
         return $data;
     }
@@ -236,10 +283,17 @@ class Peanut_Connect_Health {
         global $wpdb;
 
         $size = 0;
-        $tables = $wpdb->get_results("SHOW TABLE STATUS", ARRAY_A);
+        // Use prepare() with LIKE for consistency and to filter to WordPress tables only
+        $tables = $wpdb->get_results(
+            $wpdb->prepare(
+                "SHOW TABLE STATUS LIKE %s",
+                $wpdb->esc_like($wpdb->prefix) . '%'
+            ),
+            ARRAY_A
+        );
 
         foreach ($tables as $table) {
-            $size += $table['Data_length'] + $table['Index_length'];
+            $size += ($table['Data_length'] ?? 0) + ($table['Index_length'] ?? 0);
         }
 
         return [
@@ -343,7 +397,7 @@ class Peanut_Connect_Health {
      */
     private static function get_server_data(): array {
         return [
-            'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+            'software' => sanitize_text_field($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'),
             'php_sapi' => php_sapi_name(),
             'max_upload_size' => wp_max_upload_size(),
             'max_upload_size_formatted' => size_format(wp_max_upload_size()),

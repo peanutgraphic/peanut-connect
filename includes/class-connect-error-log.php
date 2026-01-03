@@ -365,7 +365,7 @@ class Peanut_Connect_Error_Log {
             return 'CLI';
         }
 
-        $url = $_SERVER['REQUEST_URI'] ?? '';
+        $url = esc_url_raw($_SERVER['REQUEST_URI'] ?? '');
 
         // Truncate long URLs
         if (strlen($url) > 200) {

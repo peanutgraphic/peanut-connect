@@ -1,0 +1,239 @@
+<?php
+/**
+ * WordPress function mocks for standalone testing.
+ *
+ * These mocks allow testing of plugin logic without a full WordPress installation.
+ * For integration tests, use the WordPress test suite.
+ *
+ * @package Peanut_Suite
+ */
+
+if (!defined('ABSPATH')) {
+    define('ABSPATH', '/tmp/wordpress/');
+}
+
+if (!defined('WPINC')) {
+    define('WPINC', 'wp-includes');
+}
+
+if (!defined('WP_CONTENT_DIR')) {
+    define('WP_CONTENT_DIR', ABSPATH . 'wp-content');
+}
+
+if (!defined('WP_PLUGIN_DIR')) {
+    define('WP_PLUGIN_DIR', WP_CONTENT_DIR . '/plugins');
+}
+
+// Mock common WordPress functions.
+
+if (!function_exists('esc_html')) {
+    function esc_html($text) {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_attr')) {
+    function esc_attr($text) {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_url')) {
+    function esc_url($url) {
+        return filter_var($url, FILTER_SANITIZE_URL);
+    }
+}
+
+if (!function_exists('sanitize_text_field')) {
+    function sanitize_text_field($str) {
+        return htmlspecialchars(strip_tags(trim($str)), ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('sanitize_email')) {
+    function sanitize_email($email) {
+        return filter_var($email, FILTER_SANITIZE_EMAIL);
+    }
+}
+
+if (!function_exists('wp_unslash')) {
+    function wp_unslash($value) {
+        return stripslashes_deep($value);
+    }
+}
+
+if (!function_exists('stripslashes_deep')) {
+    function stripslashes_deep($value) {
+        if (is_array($value)) {
+            return array_map('stripslashes_deep', $value);
+        }
+        return stripslashes($value);
+    }
+}
+
+if (!function_exists('absint')) {
+    function absint($maybeint) {
+        return abs((int) $maybeint);
+    }
+}
+
+if (!function_exists('wp_json_encode')) {
+    function wp_json_encode($data, $options = 0, $depth = 512) {
+        return json_encode($data, $options, $depth);
+    }
+}
+
+if (!function_exists('__')) {
+    function __($text, $domain = 'default') {
+        return $text;
+    }
+}
+
+if (!function_exists('_e')) {
+    function _e($text, $domain = 'default') {
+        echo $text;
+    }
+}
+
+if (!function_exists('esc_html__')) {
+    function esc_html__($text, $domain = 'default') {
+        return esc_html($text);
+    }
+}
+
+if (!function_exists('esc_html_e')) {
+    function esc_html_e($text, $domain = 'default') {
+        echo esc_html($text);
+    }
+}
+
+if (!function_exists('wp_hash')) {
+    function wp_hash($data, $scheme = 'auth') {
+        return hash('sha256', $data . 'test_salt');
+    }
+}
+
+if (!function_exists('wp_salt')) {
+    function wp_salt($scheme = 'auth') {
+        return 'test_salt_' . $scheme;
+    }
+}
+
+if (!function_exists('current_time')) {
+    function current_time($type, $gmt = 0) {
+        if ($type === 'timestamp' || $type === 'U') {
+            return time();
+        }
+        if ($type === 'mysql') {
+            return date('Y-m-d H:i:s');
+        }
+        return date($type);
+    }
+}
+
+if (!function_exists('get_option')) {
+    function get_option($option, $default = false) {
+        global $mock_options;
+        return $mock_options[$option] ?? $default;
+    }
+}
+
+if (!function_exists('update_option')) {
+    function update_option($option, $value, $autoload = null) {
+        global $mock_options;
+        $mock_options[$option] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('delete_option')) {
+    function delete_option($option) {
+        global $mock_options;
+        unset($mock_options[$option]);
+        return true;
+    }
+}
+
+if (!function_exists('get_transient')) {
+    function get_transient($transient) {
+        global $mock_transients;
+        $data = $mock_transients[$transient] ?? null;
+        if ($data && isset($data['expiration']) && $data['expiration'] < time()) {
+            unset($mock_transients[$transient]);
+            return false;
+        }
+        return $data['value'] ?? false;
+    }
+}
+
+if (!function_exists('set_transient')) {
+    function set_transient($transient, $value, $expiration = 0) {
+        global $mock_transients;
+        $mock_transients[$transient] = [
+            'value' => $value,
+            'expiration' => $expiration > 0 ? time() + $expiration : 0,
+        ];
+        return true;
+    }
+}
+
+if (!function_exists('delete_transient')) {
+    function delete_transient($transient) {
+        global $mock_transients;
+        unset($mock_transients[$transient]);
+        return true;
+    }
+}
+
+if (!function_exists('is_wp_error')) {
+    function is_wp_error($thing) {
+        return $thing instanceof WP_Error;
+    }
+}
+
+if (!class_exists('WP_Error')) {
+    class WP_Error {
+        public $errors = [];
+        public $error_data = [];
+
+        public function __construct($code = '', $message = '', $data = '') {
+            if (!empty($code)) {
+                $this->errors[$code][] = $message;
+                if (!empty($data)) {
+                    $this->error_data[$code] = $data;
+                }
+            }
+        }
+
+        public function get_error_code() {
+            $codes = array_keys($this->errors);
+            return $codes[0] ?? '';
+        }
+
+        public function get_error_message($code = '') {
+            if (empty($code)) {
+                $code = $this->get_error_code();
+            }
+            return $this->errors[$code][0] ?? '';
+        }
+
+        public function get_error_data($code = '') {
+            if (empty($code)) {
+                $code = $this->get_error_code();
+            }
+            return $this->error_data[$code] ?? null;
+        }
+
+        public function add($code, $message, $data = '') {
+            $this->errors[$code][] = $message;
+            if (!empty($data)) {
+                $this->error_data[$code] = $data;
+            }
+        }
+    }
+}
+
+// Initialize mock storage.
+global $mock_options, $mock_transients;
+$mock_options = [];
+$mock_transients = [];

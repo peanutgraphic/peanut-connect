@@ -141,7 +141,7 @@ class Peanut_Connect_Popup_Display {
         wp_localize_script('peanut-connect-popups', 'peanutConnectPopups', [
             'popups' => $popups,
             'restUrl' => rest_url('peanut-connect/v1'),
-            'nonce' => wp_create_nonce('peanut_connect_popup'),
+            'nonce' => wp_create_nonce('wp_rest'),
             'visitorId' => Peanut_Connect_Tracker::get_visitor_id(),
         ]);
     }

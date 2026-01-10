@@ -1,0 +1,518 @@
+<?php
+/**
+ * Peanut Connect Hub Sync
+ *
+ * Handles syncing tracking data to the Peanut Hub SaaS platform.
+ *
+ * @package Peanut_Connect
+ * @since 2.3.0
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/**
+ * Hub sync class
+ */
+class Peanut_Connect_Hub_Sync {
+
+    /**
+     * Batch size for syncing
+     */
+    const BATCH_SIZE = 100;
+
+    /**
+     * Sync interval in minutes
+     */
+    const SYNC_INTERVAL = 15;
+
+    /**
+     * Initialize sync
+     */
+    public static function init(): void {
+        // Register cron hook
+        add_action('peanut_connect_sync_to_hub', [__CLASS__, 'run_sync']);
+
+        // Schedule cron if not already
+        if (!wp_next_scheduled('peanut_connect_sync_to_hub')) {
+            wp_schedule_event(time(), 'peanut_fifteen_minutes', 'peanut_connect_sync_to_hub');
+        }
+
+        // Add custom cron interval
+        add_filter('cron_schedules', [__CLASS__, 'add_cron_interval']);
+
+        // REST endpoint for manual trigger
+        add_action('rest_api_init', [__CLASS__, 'register_sync_endpoint']);
+    }
+
+    /**
+     * Add custom cron interval
+     */
+    public static function add_cron_interval(array $schedules): array {
+        $schedules['peanut_fifteen_minutes'] = [
+            'interval' => self::SYNC_INTERVAL * 60,
+            'display' => sprintf(__('Every %d minutes', 'peanut-connect'), self::SYNC_INTERVAL),
+        ];
+        return $schedules;
+    }
+
+    /**
+     * Register REST endpoint for manual sync
+     */
+    public static function register_sync_endpoint(): void {
+        register_rest_route('peanut-connect/v1', '/sync/trigger', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'handle_manual_sync'],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ]);
+
+        register_rest_route('peanut-connect/v1', '/sync/status', [
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'get_sync_status'],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ]);
+    }
+
+    /**
+     * Handle manual sync trigger
+     */
+    public static function handle_manual_sync(\WP_REST_Request $request): \WP_REST_Response {
+        $result = self::run_sync();
+
+        return new \WP_REST_Response([
+            'success' => $result['success'],
+            'stats' => $result['stats'] ?? null,
+            'message' => $result['message'] ?? null,
+        ]);
+    }
+
+    /**
+     * Get sync status
+     */
+    public static function get_sync_status(\WP_REST_Request $request): \WP_REST_Response {
+        $unsynced = Peanut_Connect_Database::get_unsynced_counts();
+        $last_sync = get_option('peanut_connect_last_hub_sync');
+        $hub_url = get_option('peanut_connect_hub_url');
+        $connected = !empty($hub_url) && !empty(get_option('peanut_connect_hub_api_key'));
+
+        return new \WP_REST_Response([
+            'connected' => $connected,
+            'hub_url' => $hub_url,
+            'last_sync' => $last_sync,
+            'pending' => $unsynced,
+            'total_pending' => array_sum($unsynced),
+        ]);
+    }
+
+    /**
+     * Run the sync process
+     */
+    public static function run_sync(): array {
+        $hub_url = get_option('peanut_connect_hub_url');
+        $api_key = get_option('peanut_connect_hub_api_key');
+
+        if (empty($hub_url) || empty($api_key)) {
+            return [
+                'success' => false,
+                'message' => 'Hub not configured',
+            ];
+        }
+
+        $stats = [
+            'visitors' => 0,
+            'events' => 0,
+            'touches' => 0,
+            'conversions' => 0,
+            'popup_interactions' => 0,
+        ];
+
+        try {
+            // Sync each data type
+            $stats['visitors'] = self::sync_visitors($hub_url, $api_key);
+            $stats['events'] = self::sync_events($hub_url, $api_key);
+            $stats['touches'] = self::sync_touches($hub_url, $api_key);
+            $stats['conversions'] = self::sync_conversions($hub_url, $api_key);
+            $stats['popup_interactions'] = self::sync_popup_interactions($hub_url, $api_key);
+
+            // Update last sync time
+            update_option('peanut_connect_last_hub_sync', current_time('mysql', true));
+
+            // Log success
+            Peanut_Connect_Activity_Log::log('hub_sync', 'success', 0, [
+                'stats' => $stats,
+            ]);
+
+            return [
+                'success' => true,
+                'stats' => $stats,
+            ];
+
+        } catch (\Exception $e) {
+            Peanut_Connect_Activity_Log::log('hub_sync', 'error', 0, [
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Sync visitors to hub
+     */
+    private static function sync_visitors(string $hub_url, string $api_key): int {
+        global $wpdb;
+
+        $table = Peanut_Connect_Database::table('visitors');
+        $synced = 0;
+
+        while (true) {
+            $visitors = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $table WHERE synced = 0 ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    self::BATCH_SIZE
+                ),
+                ARRAY_A
+            );
+
+            if (empty($visitors)) {
+                break;
+            }
+
+            $response = self::send_to_hub($hub_url, $api_key, ['visitors' => $visitors]);
+
+            if ($response['success']) {
+                $ids = array_column($visitors, 'id');
+                self::mark_synced($table, $ids);
+                $synced += count($visitors);
+            } else {
+                throw new \Exception('Failed to sync visitors: ' . ($response['message'] ?? 'Unknown error'));
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Sync events to hub
+     */
+    private static function sync_events(string $hub_url, string $api_key): int {
+        global $wpdb;
+
+        $table = Peanut_Connect_Database::table('events');
+        $synced = 0;
+
+        while (true) {
+            $events = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $table WHERE synced = 0 ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    self::BATCH_SIZE
+                ),
+                ARRAY_A
+            );
+
+            if (empty($events)) {
+                break;
+            }
+
+            $response = self::send_to_hub($hub_url, $api_key, ['events' => $events]);
+
+            if ($response['success']) {
+                $ids = array_column($events, 'id');
+                self::mark_synced($table, $ids);
+                $synced += count($events);
+            } else {
+                throw new \Exception('Failed to sync events: ' . ($response['message'] ?? 'Unknown error'));
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Sync touches to hub
+     */
+    private static function sync_touches(string $hub_url, string $api_key): int {
+        global $wpdb;
+
+        $table = Peanut_Connect_Database::table('touches');
+        $synced = 0;
+
+        while (true) {
+            $touches = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $table WHERE synced = 0 ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    self::BATCH_SIZE
+                ),
+                ARRAY_A
+            );
+
+            if (empty($touches)) {
+                break;
+            }
+
+            $response = self::send_to_hub($hub_url, $api_key, ['touches' => $touches]);
+
+            if ($response['success']) {
+                $ids = array_column($touches, 'id');
+                self::mark_synced($table, $ids);
+                $synced += count($touches);
+            } else {
+                throw new \Exception('Failed to sync touches: ' . ($response['message'] ?? 'Unknown error'));
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Sync conversions to hub
+     */
+    private static function sync_conversions(string $hub_url, string $api_key): int {
+        global $wpdb;
+
+        $table = Peanut_Connect_Database::table('conversions');
+        $synced = 0;
+
+        while (true) {
+            $conversions = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $table WHERE synced = 0 ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    self::BATCH_SIZE
+                ),
+                ARRAY_A
+            );
+
+            if (empty($conversions)) {
+                break;
+            }
+
+            $response = self::send_to_hub($hub_url, $api_key, ['conversions' => $conversions]);
+
+            if ($response['success']) {
+                $ids = array_column($conversions, 'id');
+                self::mark_synced($table, $ids);
+                $synced += count($conversions);
+            } else {
+                throw new \Exception('Failed to sync conversions: ' . ($response['message'] ?? 'Unknown error'));
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Sync popup interactions to hub
+     */
+    private static function sync_popup_interactions(string $hub_url, string $api_key): int {
+        global $wpdb;
+
+        $table = Peanut_Connect_Database::table('popup_interactions');
+        $synced = 0;
+
+        while (true) {
+            $interactions = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM $table WHERE synced = 0 ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    self::BATCH_SIZE
+                ),
+                ARRAY_A
+            );
+
+            if (empty($interactions)) {
+                break;
+            }
+
+            $response = self::send_to_hub($hub_url, $api_key, ['popup_interactions' => $interactions]);
+
+            if ($response['success']) {
+                $ids = array_column($interactions, 'id');
+                self::mark_synced($table, $ids);
+                $synced += count($interactions);
+            } else {
+                throw new \Exception('Failed to sync popup interactions: ' . ($response['message'] ?? 'Unknown error'));
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Send data to hub
+     */
+    private static function send_to_hub(string $hub_url, string $api_key, array $data): array {
+        $endpoint = rtrim($hub_url, '/') . '/api/v1/sync/push';
+
+        $response = wp_remote_post($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ],
+            'body' => wp_json_encode($data),
+            'timeout' => 30,
+        ]);
+
+        if (is_wp_error($response)) {
+            return [
+                'success' => false,
+                'message' => $response->get_error_message(),
+            ];
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $status_code = wp_remote_retrieve_response_code($response);
+
+        if ($status_code >= 200 && $status_code < 300 && ($body['success'] ?? false)) {
+            return [
+                'success' => true,
+                'stats' => $body['stats'] ?? [],
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => $body['message'] ?? "HTTP $status_code",
+        ];
+    }
+
+    /**
+     * Mark records as synced
+     */
+    private static function mark_synced(string $table, array $ids): void {
+        global $wpdb;
+
+        if (empty($ids)) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $now = current_time('mysql', true);
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE $table SET synced = 1, synced_at = %s WHERE id IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared
+                array_merge([$now], $ids)
+            )
+        );
+    }
+
+    /**
+     * Send heartbeat to hub
+     */
+    public static function send_heartbeat(): array {
+        $hub_url = get_option('peanut_connect_hub_url');
+        $api_key = get_option('peanut_connect_hub_api_key');
+
+        if (empty($hub_url) || empty($api_key)) {
+            return [
+                'success' => false,
+                'message' => 'Hub not configured',
+            ];
+        }
+
+        $endpoint = rtrim($hub_url, '/') . '/api/v1/sync/heartbeat';
+
+        $health = new Peanut_Connect_Health();
+
+        $response = wp_remote_post($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'health_data' => $health->get_health_data(),
+                'connect_version' => PEANUT_CONNECT_VERSION,
+                'wp_version' => get_bloginfo('version'),
+                'php_version' => PHP_VERSION,
+            ]),
+            'timeout' => 15,
+        ]);
+
+        if (is_wp_error($response)) {
+            return [
+                'success' => false,
+                'message' => $response->get_error_message(),
+            ];
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $status_code = wp_remote_retrieve_response_code($response);
+
+        if ($status_code >= 200 && $status_code < 300 && ($body['success'] ?? false)) {
+            // Store active popups if returned
+            if (!empty($body['popups'])) {
+                update_option('peanut_connect_hub_popups', $body['popups']);
+            }
+
+            return [
+                'success' => true,
+                'sync_enabled' => $body['sync_enabled'] ?? true,
+                'popups' => $body['popups'] ?? [],
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => $body['message'] ?? "HTTP $status_code",
+        ];
+    }
+
+    /**
+     * Verify hub connection
+     */
+    public static function verify_hub_connection(string $hub_url, string $api_key): array {
+        $endpoint = rtrim($hub_url, '/') . '/api/v1/sites/verify';
+
+        $response = wp_remote_post($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ],
+            'timeout' => 15,
+        ]);
+
+        if (is_wp_error($response)) {
+            return [
+                'success' => false,
+                'message' => $response->get_error_message(),
+            ];
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $status_code = wp_remote_retrieve_response_code($response);
+
+        if ($status_code >= 200 && $status_code < 300 && ($body['success'] ?? false)) {
+            return [
+                'success' => true,
+                'site' => $body['site'] ?? [],
+                'client' => $body['client'] ?? [],
+                'agency' => $body['agency'] ?? [],
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => $body['message'] ?? "HTTP $status_code",
+        ];
+    }
+
+    /**
+     * Unschedule sync cron
+     */
+    public static function unschedule(): void {
+        $timestamp = wp_next_scheduled('peanut_connect_sync_to_hub');
+        if ($timestamp) {
+            wp_unschedule_event($timestamp, 'peanut_connect_sync_to_hub');
+        }
+    }
+}

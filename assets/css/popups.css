@@ -1,0 +1,371 @@
+/**
+ * Peanut Connect Popups
+ *
+ * Styles for hub-managed popups.
+ *
+ * @package Peanut_Connect
+ * @since 2.3.0
+ */
+
+/* CSS Variables with defaults */
+.peanut-popup {
+    --popup-bg: #ffffff;
+    --popup-text: #1f2937;
+    --popup-button-bg: #3b82f6;
+    --popup-button-text: #ffffff;
+    --popup-overlay: rgba(0, 0, 0, 0.5);
+    --popup-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --popup-radius: 12px;
+}
+
+/* Base popup styles */
+.peanut-popup {
+    position: fixed;
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.peanut-popup.peanut-popup-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.peanut-popup.peanut-popup-closing {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Overlay */
+.peanut-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--popup-overlay);
+    cursor: pointer;
+}
+
+/* Content container */
+.peanut-popup-content {
+    position: relative;
+    background: var(--popup-bg);
+    color: var(--popup-text);
+    border-radius: var(--popup-radius);
+    box-shadow: var(--popup-shadow);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: auto;
+}
+
+/* Close button */
+.peanut-popup-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    z-index: 1;
+}
+
+.peanut-popup-close:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Image */
+.peanut-popup-image {
+    width: 100%;
+    height: auto;
+    border-radius: var(--popup-radius) var(--popup-radius) 0 0;
+    display: block;
+}
+
+/* Title */
+.peanut-popup-title {
+    margin: 0 0 12px;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+/* Body */
+.peanut-popup-body {
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.peanut-popup-body p {
+    margin: 0 0 12px;
+}
+
+.peanut-popup-body p:last-child {
+    margin-bottom: 0;
+}
+
+/* CTA Button */
+.peanut-popup-cta {
+    display: inline-block;
+    padding: 12px 24px;
+    background: var(--popup-button-bg);
+    color: var(--popup-button-text);
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.peanut-popup-cta:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* Modal type */
+.peanut-popup-modal {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.peanut-popup-modal .peanut-popup-content {
+    width: 480px;
+    padding: 32px;
+}
+
+.peanut-popup-modal .peanut-popup-content:has(.peanut-popup-image) {
+    padding: 0;
+}
+
+.peanut-popup-modal .peanut-popup-content:has(.peanut-popup-image) .peanut-popup-title,
+.peanut-popup-modal .peanut-popup-content:has(.peanut-popup-image) .peanut-popup-body,
+.peanut-popup-modal .peanut-popup-content:has(.peanut-popup-image) .peanut-popup-cta {
+    padding-left: 32px;
+    padding-right: 32px;
+}
+
+.peanut-popup-modal .peanut-popup-content:has(.peanut-popup-image) .peanut-popup-title {
+    padding-top: 24px;
+}
+
+.peanut-popup-modal .peanut-popup-content:has(.peanut-popup-image) .peanut-popup-cta {
+    margin-bottom: 32px;
+}
+
+/* Slide-in type */
+.peanut-popup-slide_in {
+    bottom: 24px;
+    right: 24px;
+}
+
+.peanut-popup-slide_in .peanut-popup-overlay {
+    display: none;
+}
+
+.peanut-popup-slide_in .peanut-popup-content {
+    width: 360px;
+    padding: 24px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+
+.peanut-popup-slide_in.peanut-popup-visible .peanut-popup-content {
+    transform: translateX(0);
+}
+
+.peanut-popup-slide_in.peanut-popup-closing .peanut-popup-content {
+    transform: translateX(100%);
+}
+
+/* Bar type */
+.peanut-popup-bar {
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+.peanut-popup-bar .peanut-popup-overlay {
+    display: none;
+}
+
+.peanut-popup-bar .peanut-popup-content {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+}
+
+.peanut-popup-bar.peanut-popup-visible .peanut-popup-content {
+    transform: translateY(0);
+}
+
+.peanut-popup-bar.peanut-popup-closing .peanut-popup-content {
+    transform: translateY(-100%);
+}
+
+.peanut-popup-bar .peanut-popup-title {
+    margin: 0;
+    font-size: 16px;
+}
+
+.peanut-popup-bar .peanut-popup-body {
+    margin: 0;
+    font-size: 14px;
+}
+
+.peanut-popup-bar .peanut-popup-cta {
+    padding: 8px 16px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.peanut-popup-bar .peanut-popup-close {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+}
+
+/* Toast type */
+.peanut-popup-toast {
+    bottom: 24px;
+    left: 24px;
+}
+
+.peanut-popup-toast .peanut-popup-overlay {
+    display: none;
+}
+
+.peanut-popup-toast .peanut-popup-content {
+    width: 320px;
+    padding: 16px 20px;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+}
+
+.peanut-popup-toast.peanut-popup-visible .peanut-popup-content {
+    transform: translateY(0);
+}
+
+.peanut-popup-toast.peanut-popup-closing .peanut-popup-content {
+    transform: translateY(100%);
+}
+
+.peanut-popup-toast .peanut-popup-title {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.peanut-popup-toast .peanut-popup-body {
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.peanut-popup-toast .peanut-popup-cta {
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+/* Fullscreen type */
+.peanut-popup-fullscreen {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.peanut-popup-fullscreen .peanut-popup-content {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 48px;
+}
+
+.peanut-popup-fullscreen .peanut-popup-title {
+    font-size: 36px;
+}
+
+.peanut-popup-fullscreen .peanut-popup-body {
+    font-size: 18px;
+    max-width: 600px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .peanut-popup-modal .peanut-popup-content {
+        width: calc(100vw - 32px);
+        padding: 24px;
+    }
+
+    .peanut-popup-slide_in {
+        bottom: 16px;
+        right: 16px;
+        left: 16px;
+    }
+
+    .peanut-popup-slide_in .peanut-popup-content {
+        width: 100%;
+    }
+
+    .peanut-popup-toast {
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
+    }
+
+    .peanut-popup-toast .peanut-popup-content {
+        width: 100%;
+    }
+
+    .peanut-popup-bar .peanut-popup-content {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+
+    .peanut-popup-fullscreen .peanut-popup-content {
+        padding: 24px;
+    }
+
+    .peanut-popup-fullscreen .peanut-popup-title {
+        font-size: 24px;
+    }
+
+    .peanut-popup-fullscreen .peanut-popup-body {
+        font-size: 16px;
+    }
+}

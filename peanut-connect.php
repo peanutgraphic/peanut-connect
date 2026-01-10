@@ -3,7 +3,7 @@
  * Plugin Name: Peanut Connect
  * Plugin URI: https://peanutgraphic.com/peanut-connect
  * Description: Lightweight connector plugin for Peanut Monitor. Allows centralized site management from your manager site.
- * Version: 2.2.1
+ * Version: 2.5.1
  * Author: Peanut Graphic
  * Author URI: https://peanutgraphic.com
  * License: GPL-2.0-or-later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PEANUT_CONNECT_VERSION', '2.2.1');
+define('PEANUT_CONNECT_VERSION', '2.5.1');
 define('PEANUT_CONNECT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PEANUT_CONNECT_API_NAMESPACE', 'peanut-connect/v1');
 
@@ -62,9 +62,21 @@ final class Peanut_Connect {
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-api.php';
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-self-updater.php';
 
+        // Hub tracking and sync classes (v2.3.0+)
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-database.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-tracker.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-hub-sync.php';
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-popup-display.php';
+
+        // Security hardening (v2.5.0+)
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-security.php';
+
         // Initialize logging early
         Peanut_Connect_Activity_Log::init();
         Peanut_Connect_Error_Log::init();
+
+        // Initialize security features
+        Peanut_Connect_Security::init();
 
         // Initialize self-updater early so update check filter is registered
         new Peanut_Connect_Self_Updater();
@@ -82,6 +94,49 @@ final class Peanut_Connect {
 
         // Add settings link to plugins page
         add_filter('plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_settings_link']);
+
+        // Initialize Hub tracking and sync (v2.3.0+)
+        if ($this->is_hub_connected()) {
+            // Initialize frontend tracking
+            Peanut_Connect_Tracker::init();
+
+            // Initialize popup display
+            Peanut_Connect_Popup_Display::init();
+
+            // Schedule sync cron
+            add_action('peanut_connect_hub_sync', [Peanut_Connect_Hub_Sync::class, 'run_sync']);
+            add_action('peanut_connect_hub_heartbeat', [Peanut_Connect_Hub_Sync::class, 'send_heartbeat']);
+
+            if (!wp_next_scheduled('peanut_connect_hub_sync')) {
+                wp_schedule_event(time(), 'fifteen_minutes', 'peanut_connect_hub_sync');
+            }
+            if (!wp_next_scheduled('peanut_connect_hub_heartbeat')) {
+                wp_schedule_event(time(), 'hourly', 'peanut_connect_hub_heartbeat');
+            }
+        }
+
+        // Register custom cron schedule
+        add_filter('cron_schedules', [$this, 'add_cron_schedules']);
+    }
+
+    /**
+     * Check if hub is connected
+     */
+    public function is_hub_connected(): bool {
+        $hub_url = get_option('peanut_connect_hub_url');
+        $api_key = get_option('peanut_connect_hub_api_key');
+        return !empty($hub_url) && !empty($api_key);
+    }
+
+    /**
+     * Add custom cron schedules
+     */
+    public function add_cron_schedules(array $schedules): array {
+        $schedules['fifteen_minutes'] = [
+            'interval' => 15 * MINUTE_IN_SECONDS,
+            'display' => __('Every 15 Minutes', 'peanut-connect'),
+        ];
+        return $schedules;
     }
 
     /**
@@ -483,6 +538,10 @@ register_activation_hook(__FILE__, function() {
             'access_analytics' => true,
         ]);
     }
+
+    // Create Hub tracking database tables (v2.3.0+)
+    require_once plugin_dir_path(__FILE__) . 'includes/class-connect-database.php';
+    Peanut_Connect_Database::create_tables();
 });
 
 /**
@@ -490,4 +549,8 @@ register_activation_hook(__FILE__, function() {
  */
 register_deactivation_hook(__FILE__, function() {
     // Optionally notify manager of disconnection
+
+    // Clear Hub sync cron jobs (v2.3.0+)
+    wp_clear_scheduled_hook('peanut_connect_hub_sync');
+    wp_clear_scheduled_hook('peanut_connect_hub_heartbeat');
 });

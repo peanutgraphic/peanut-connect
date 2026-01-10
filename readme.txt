@@ -4,7 +4,7 @@ Tags: monitor, management, multisite, updates, health
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 8.0
-Stable tag: 2.1.2
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,17 @@ No. Peanut Connect only responds to authenticated API requests from your manager
 
 == Changelog ==
 
+= 2.3.0 =
+* NEW: Hub integration for centralized agency management
+* NEW: Visitor tracking with cookie-based identification
+* NEW: Event tracking (pageviews, scroll depth, form submissions)
+* NEW: UTM parameter capture and attribution tracking
+* NEW: Conversion tracking API
+* NEW: Hub-managed popup system with multiple types (modal, slide-in, bar, toast, fullscreen)
+* NEW: Automatic data sync to Peanut Hub (every 15 minutes)
+* NEW: Frontend tracking JavaScript
+* Database tables for local event queuing
+
 = 1.0.0 =
 * Initial release
 * Site health monitoring
@@ -73,6 +84,9 @@ No. Peanut Connect only responds to authenticated API requests from your manager
 * Permission controls
 
 == Upgrade Notice ==
+
+= 2.3.0 =
+Major update: Connect to Peanut Hub for centralized agency management with visitor tracking, attribution, and hub-managed popups.
 
 = 1.0.0 =
 Initial release of Peanut Connect.

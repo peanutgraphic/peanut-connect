@@ -21,9 +21,19 @@ export interface Permissions {
   access_analytics: boolean;
 }
 
+// Hub connection status
+export interface HubStatus {
+  connected: boolean;
+  url: string;
+  api_key: string;
+  api_key_set: boolean;
+  last_sync: string | null;
+}
+
 // Settings
 export interface Settings {
   connection: ConnectionStatus;
+  hub: HubStatus;
   permissions: Permissions;
   peanut_suite: PeanutSuiteInfo | null;
 }

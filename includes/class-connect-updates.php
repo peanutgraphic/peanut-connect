@@ -292,4 +292,381 @@ class Peanut_Connect_Updates {
 
         return null;
     }
+
+    /**
+     * Get ALL installed plugins with full details
+     */
+    public static function get_all_plugins(): array {
+        if (!function_exists('get_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $all_plugins = get_plugins();
+        $active_plugins = get_option('active_plugins', []);
+        $update_plugins = get_site_transient('update_plugins');
+        $plugins = [];
+
+        foreach ($all_plugins as $plugin_file => $plugin_data) {
+            $slug = dirname($plugin_file);
+            if ($slug === '.') {
+                $slug = basename($plugin_file, '.php');
+            }
+
+            $has_update = isset($update_plugins->response[$plugin_file]);
+            $new_version = $has_update ? $update_plugins->response[$plugin_file]->new_version : null;
+
+            $plugins[] = [
+                'file' => $plugin_file,
+                'slug' => $slug,
+                'name' => $plugin_data['Name'],
+                'version' => $plugin_data['Version'],
+                'description' => $plugin_data['Description'] ?? '',
+                'author' => $plugin_data['Author'] ?? '',
+                'author_uri' => $plugin_data['AuthorURI'] ?? '',
+                'plugin_uri' => $plugin_data['PluginURI'] ?? '',
+                'active' => in_array($plugin_file, $active_plugins),
+                'has_update' => $has_update,
+                'new_version' => $new_version,
+                'network_active' => is_multisite() && is_plugin_active_for_network($plugin_file),
+                'requires_wp' => $plugin_data['RequiresWP'] ?? '',
+                'requires_php' => $plugin_data['RequiresPHP'] ?? '',
+                'auto_update' => self::is_auto_update_enabled('plugin', $plugin_file),
+            ];
+        }
+
+        // Sort by name
+        usort($plugins, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+
+        return $plugins;
+    }
+
+    /**
+     * Get ALL installed themes with full details
+     */
+    public static function get_all_themes(): array {
+        $all_themes = wp_get_themes();
+        $active_theme = get_stylesheet();
+        $parent_theme = get_template();
+        $update_themes = get_site_transient('update_themes');
+        $themes = [];
+
+        foreach ($all_themes as $stylesheet => $theme) {
+            $has_update = isset($update_themes->response[$stylesheet]);
+            $new_version = $has_update ? $update_themes->response[$stylesheet]['new_version'] : null;
+
+            $themes[] = [
+                'slug' => $stylesheet,
+                'name' => $theme->get('Name'),
+                'version' => $theme->get('Version'),
+                'description' => $theme->get('Description'),
+                'author' => $theme->get('Author'),
+                'author_uri' => $theme->get('AuthorURI'),
+                'theme_uri' => $theme->get('ThemeURI'),
+                'active' => $stylesheet === $active_theme,
+                'parent' => $theme->parent() ? $theme->parent()->get_stylesheet() : null,
+                'is_parent' => $stylesheet === $parent_theme && $stylesheet !== $active_theme,
+                'has_update' => $has_update,
+                'new_version' => $new_version,
+                'screenshot' => $theme->get_screenshot(),
+                'requires_wp' => $theme->get('RequiresWP'),
+                'requires_php' => $theme->get('RequiresPHP'),
+                'auto_update' => self::is_auto_update_enabled('theme', $stylesheet),
+            ];
+        }
+
+        // Sort: active first, then by name
+        usort($themes, function($a, $b) {
+            if ($a['active'] !== $b['active']) {
+                return $a['active'] ? -1 : 1;
+            }
+            return strcasecmp($a['name'], $b['name']);
+        });
+
+        return $themes;
+    }
+
+    /**
+     * Check if auto-update is enabled for a plugin or theme
+     */
+    private static function is_auto_update_enabled(string $type, string $item): bool {
+        if ($type === 'plugin') {
+            $auto_updates = get_site_option('auto_update_plugins', []);
+            return in_array($item, $auto_updates);
+        } elseif ($type === 'theme') {
+            $auto_updates = get_site_option('auto_update_themes', []);
+            return in_array($item, $auto_updates);
+        }
+        return false;
+    }
+
+    /**
+     * Activate a plugin
+     */
+    public static function activate_plugin(string $plugin_file): array|WP_Error {
+        if (!function_exists('activate_plugin')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        // Verify plugin exists
+        $all_plugins = get_plugins();
+        if (!isset($all_plugins[$plugin_file])) {
+            return new WP_Error('plugin_not_found', __('Plugin not found.', 'peanut-connect'));
+        }
+
+        // Check if already active
+        if (is_plugin_active($plugin_file)) {
+            return new WP_Error('already_active', __('Plugin is already active.', 'peanut-connect'));
+        }
+
+        // Activate
+        $result = activate_plugin($plugin_file);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'plugin' => $plugin_file,
+            'name' => $all_plugins[$plugin_file]['Name'],
+            'message' => sprintf(__('Plugin "%s" activated.', 'peanut-connect'), $all_plugins[$plugin_file]['Name']),
+        ];
+    }
+
+    /**
+     * Deactivate a plugin
+     */
+    public static function deactivate_plugin(string $plugin_file): array|WP_Error {
+        if (!function_exists('deactivate_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        // Verify plugin exists
+        $all_plugins = get_plugins();
+        if (!isset($all_plugins[$plugin_file])) {
+            return new WP_Error('plugin_not_found', __('Plugin not found.', 'peanut-connect'));
+        }
+
+        // Check if already inactive
+        if (!is_plugin_active($plugin_file)) {
+            return new WP_Error('already_inactive', __('Plugin is already inactive.', 'peanut-connect'));
+        }
+
+        // Prevent deactivating Peanut Connect itself
+        if (strpos($plugin_file, 'peanut-connect') !== false) {
+            return new WP_Error('cannot_deactivate', __('Cannot deactivate Peanut Connect remotely.', 'peanut-connect'));
+        }
+
+        // Deactivate
+        deactivate_plugins($plugin_file);
+
+        return [
+            'success' => true,
+            'plugin' => $plugin_file,
+            'name' => $all_plugins[$plugin_file]['Name'],
+            'message' => sprintf(__('Plugin "%s" deactivated.', 'peanut-connect'), $all_plugins[$plugin_file]['Name']),
+        ];
+    }
+
+    /**
+     * Delete a plugin
+     */
+    public static function delete_plugin(string $plugin_file): array|WP_Error {
+        if (!function_exists('delete_plugins')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+
+        // Verify plugin exists
+        $all_plugins = get_plugins();
+        if (!isset($all_plugins[$plugin_file])) {
+            return new WP_Error('plugin_not_found', __('Plugin not found.', 'peanut-connect'));
+        }
+
+        // Prevent deleting Peanut Connect itself
+        if (strpos($plugin_file, 'peanut-connect') !== false) {
+            return new WP_Error('cannot_delete', __('Cannot delete Peanut Connect remotely.', 'peanut-connect'));
+        }
+
+        // Ensure plugin is deactivated first
+        if (is_plugin_active($plugin_file)) {
+            deactivate_plugins($plugin_file);
+        }
+
+        $plugin_name = $all_plugins[$plugin_file]['Name'];
+
+        // Delete
+        $result = delete_plugins([$plugin_file]);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'plugin' => $plugin_file,
+            'name' => $plugin_name,
+            'message' => sprintf(__('Plugin "%s" deleted.', 'peanut-connect'), $plugin_name),
+        ];
+    }
+
+    /**
+     * Switch active theme
+     */
+    public static function activate_theme(string $stylesheet): array|WP_Error {
+        $theme = wp_get_theme($stylesheet);
+
+        if (!$theme->exists()) {
+            return new WP_Error('theme_not_found', __('Theme not found.', 'peanut-connect'));
+        }
+
+        if (!$theme->is_allowed()) {
+            return new WP_Error('theme_not_allowed', __('Theme is not allowed.', 'peanut-connect'));
+        }
+
+        // Check if already active
+        if (get_stylesheet() === $stylesheet) {
+            return new WP_Error('already_active', __('Theme is already active.', 'peanut-connect'));
+        }
+
+        switch_theme($stylesheet);
+
+        return [
+            'success' => true,
+            'theme' => $stylesheet,
+            'name' => $theme->get('Name'),
+            'message' => sprintf(__('Theme "%s" activated.', 'peanut-connect'), $theme->get('Name')),
+        ];
+    }
+
+    /**
+     * Delete a theme
+     */
+    public static function delete_theme(string $stylesheet): array|WP_Error {
+        $theme = wp_get_theme($stylesheet);
+
+        if (!$theme->exists()) {
+            return new WP_Error('theme_not_found', __('Theme not found.', 'peanut-connect'));
+        }
+
+        // Prevent deleting active theme
+        if (get_stylesheet() === $stylesheet) {
+            return new WP_Error('cannot_delete_active', __('Cannot delete the active theme.', 'peanut-connect'));
+        }
+
+        // Prevent deleting parent of active theme
+        if (get_template() === $stylesheet && get_stylesheet() !== get_template()) {
+            return new WP_Error('cannot_delete_parent', __('Cannot delete the parent theme of the active theme.', 'peanut-connect'));
+        }
+
+        $theme_name = $theme->get('Name');
+
+        $result = delete_theme($stylesheet);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'theme' => $stylesheet,
+            'name' => $theme_name,
+            'message' => sprintf(__('Theme "%s" deleted.', 'peanut-connect'), $theme_name),
+        ];
+    }
+
+    /**
+     * Toggle auto-update for a plugin or theme
+     */
+    public static function toggle_auto_update(string $type, string $item, bool $enable): array|WP_Error {
+        if ($type === 'plugin') {
+            $auto_updates = get_site_option('auto_update_plugins', []);
+            if ($enable) {
+                if (!in_array($item, $auto_updates)) {
+                    $auto_updates[] = $item;
+                }
+            } else {
+                $auto_updates = array_diff($auto_updates, [$item]);
+            }
+            update_site_option('auto_update_plugins', $auto_updates);
+        } elseif ($type === 'theme') {
+            $auto_updates = get_site_option('auto_update_themes', []);
+            if ($enable) {
+                if (!in_array($item, $auto_updates)) {
+                    $auto_updates[] = $item;
+                }
+            } else {
+                $auto_updates = array_diff($auto_updates, [$item]);
+            }
+            update_site_option('auto_update_themes', $auto_updates);
+        } else {
+            return new WP_Error('invalid_type', __('Invalid type. Use "plugin" or "theme".', 'peanut-connect'));
+        }
+
+        return [
+            'success' => true,
+            'type' => $type,
+            'item' => $item,
+            'auto_update' => $enable,
+            'message' => $enable
+                ? __('Auto-update enabled.', 'peanut-connect')
+                : __('Auto-update disabled.', 'peanut-connect'),
+        ];
+    }
+
+    /**
+     * Bulk update all plugins with available updates
+     */
+    public static function bulk_update_plugins(): array {
+        $updates = self::get_plugin_updates();
+        $results = [
+            'success' => [],
+            'failed' => [],
+        ];
+
+        foreach ($updates as $plugin) {
+            $result = self::update_plugin($plugin['file']);
+            if (is_wp_error($result)) {
+                $results['failed'][] = [
+                    'plugin' => $plugin['name'],
+                    'error' => $result->get_error_message(),
+                ];
+            } else {
+                $results['success'][] = [
+                    'plugin' => $plugin['name'],
+                    'new_version' => $result['new_version'],
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Bulk update all themes with available updates
+     */
+    public static function bulk_update_themes(): array {
+        $updates = self::get_theme_updates();
+        $results = [
+            'success' => [],
+            'failed' => [],
+        ];
+
+        foreach ($updates as $theme) {
+            $result = self::update_theme($theme['slug']);
+            if (is_wp_error($result)) {
+                $results['failed'][] = [
+                    'theme' => $theme['name'],
+                    'error' => $result->get_error_message(),
+                ];
+            } else {
+                $results['success'][] = [
+                    'theme' => $theme['name'],
+                    'new_version' => $result['new_version'],
+                ];
+            }
+        }
+
+        return $results;
+    }
 }

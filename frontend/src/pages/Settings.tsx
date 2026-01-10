@@ -33,6 +33,9 @@ import {
   ShieldCheck,
   Info,
   Sparkles,
+  Cloud,
+  Link2,
+  Send,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { Permissions } from '@/types';
@@ -43,6 +46,11 @@ export default function Settings() {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Hub settings state
+  const [hubUrl, setHubUrl] = useState('https://hub.peanutgraphic.com');
+  const [hubApiKey, setHubApiKey] = useState('');
+  const [showHubDisconnectModal, setShowHubDisconnectModal] = useState(false);
 
   const { data: settings, isLoading, error, refetch } = useQuery({
     queryKey: ['settings'],
@@ -94,6 +102,52 @@ export default function Settings() {
     },
     onError: (err) => {
       toast.error((err as Error).message || 'Failed to update permissions');
+    },
+  });
+
+  // Hub mutations
+  const saveHubSettingsMutation = useMutation({
+    mutationFn: () => settingsApi.saveHubSettings(hubUrl, hubApiKey),
+    onSuccess: (data) => {
+      toast.success(data.message || 'Hub connected successfully');
+      setHubApiKey('');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to connect to Hub');
+    },
+  });
+
+  const testHubConnectionMutation = useMutation({
+    mutationFn: settingsApi.testHubConnection,
+    onSuccess: (data) => {
+      toast.success(data.message || 'Hub connection successful');
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Hub connection failed');
+    },
+  });
+
+  const disconnectHubMutation = useMutation({
+    mutationFn: settingsApi.disconnectHub,
+    onSuccess: () => {
+      toast.success('Disconnected from Hub');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      setShowHubDisconnectModal(false);
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to disconnect from Hub');
+    },
+  });
+
+  const triggerHubSyncMutation = useMutation({
+    mutationFn: settingsApi.triggerHubSync,
+    onSuccess: (data) => {
+      toast.success(data.message || 'Sync completed');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Sync failed');
     },
   });
 
@@ -464,6 +518,126 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Hub Connection */}
+      <Card className="mb-6">
+        <CardHeader
+          title={
+            <span className="flex items-center gap-2">
+              Hub Connection
+              <HelpTooltip content="Connect to Peanut Hub to sync health data, analytics, and receive popup deployments from your agency dashboard." />
+            </span>
+          }
+          action={<Cloud className="w-5 h-5 text-slate-400" />}
+        />
+        {settings?.hub?.connected ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
+              <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-green-900">Connected to Hub</p>
+                <p className="text-sm text-green-700 truncate">
+                  {settings.hub.url}
+                </p>
+              </div>
+            </div>
+            {settings.hub.last_sync && (
+              <p className="text-sm text-slate-500">
+                Last sync:{' '}
+                {formatDistanceToNow(new Date(settings.hub.last_sync), {
+                  addSuffix: true,
+                })}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => triggerHubSyncMutation.mutate()}
+                loading={triggerHubSyncMutation.isPending}
+                icon={<Send className="w-4 h-4" />}
+              >
+                Sync Now
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => testHubConnectionMutation.mutate()}
+                loading={testHubConnectionMutation.isPending}
+                icon={<RefreshCw className="w-4 h-4" />}
+              >
+                Test Connection
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowHubDisconnectModal(true)}
+                icon={<Unlink className="w-4 h-4" />}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <Cloud className="w-6 h-6 text-slate-400 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-slate-700">Not Connected to Hub</p>
+                <p className="text-sm text-slate-500">
+                  Enter your Hub URL and API key to connect this site.
+                </p>
+              </div>
+            </div>
+            <InfoPanel variant="guide" title="How to Connect to Hub" collapsible defaultOpen={true}>
+              <ol className="mt-2 text-sm space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
+                  <span>Go to your Hub dashboard and find this site</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
+                  <span>Copy the API key from the site settings</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
+                  <span>Paste it below and click Connect</span>
+                </li>
+              </ol>
+            </InfoPanel>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Hub URL</label>
+                <input
+                  type="url"
+                  value={hubUrl}
+                  onChange={(e) => setHubUrl(e.target.value)}
+                  placeholder="https://hub.peanutgraphic.com"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">API Key</label>
+                <input
+                  type="password"
+                  value={hubApiKey}
+                  onChange={(e) => setHubApiKey(e.target.value)}
+                  placeholder="Enter your site's API key from Hub"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <Button
+                onClick={() => saveHubSettingsMutation.mutate()}
+                loading={saveHubSettingsMutation.isPending}
+                disabled={!hubUrl || !hubApiKey}
+                icon={<Link2 className="w-4 h-4" />}
+              >
+                Connect to Hub
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* Peanut Suite Integration */}
       <Card className="mb-6">
         <CardHeader
@@ -577,6 +751,18 @@ export default function Settings() {
         confirmText="Regenerate"
         variant="danger"
         loading={regenerateKeyMutation.isPending}
+      />
+
+      {/* Hub Disconnect Modal */}
+      <ConfirmModal
+        isOpen={showHubDisconnectModal}
+        onClose={() => setShowHubDisconnectModal(false)}
+        onConfirm={() => disconnectHubMutation.mutate()}
+        title="Disconnect from Hub"
+        message="Are you sure you want to disconnect from Peanut Hub? Health data will no longer be synced and you'll need to reconfigure the connection to reconnect."
+        confirmText="Disconnect"
+        variant="danger"
+        loading={disconnectHubMutation.isPending}
       />
     </Layout>
   );

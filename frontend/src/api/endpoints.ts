@@ -43,6 +43,41 @@ export const settingsApi = {
     const response = await api.post('/settings/disconnect');
     return response.data;
   },
+
+  // Hub settings - save
+  saveHubSettings: async (hubUrl: string, apiKey: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      site: Record<string, unknown>;
+      client: Record<string, unknown>;
+      agency: Record<string, unknown>;
+    };
+  }> => {
+    const response = await api.post('/settings/hub', { hub_url: hubUrl, api_key: apiKey });
+    return response.data;
+  },
+
+  // Hub settings - test connection
+  testHubConnection: async (): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const response = await api.post('/settings/hub/test');
+    return response.data;
+  },
+
+  // Hub settings - disconnect
+  disconnectHub: async (): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post('/settings/hub/disconnect');
+    return response.data;
+  },
+
+  // Hub settings - trigger sync
+  triggerHubSync: async (): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post('/settings/hub/sync');
+    return response.data;
+  },
 };
 
 // Health API

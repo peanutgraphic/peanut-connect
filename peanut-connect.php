@@ -3,7 +3,7 @@
  * Plugin Name: Peanut Connect
  * Plugin URI: https://peanutgraphic.com/peanut-connect
  * Description: Lightweight connector plugin for Peanut Monitor. Allows centralized site management from your manager site.
- * Version: 2.5.2
+ * Version: 2.5.3
  * Author: Peanut Graphic
  * Author URI: https://peanutgraphic.com
  * License: GPL-2.0-or-later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PEANUT_CONNECT_VERSION', '2.5.2');
+define('PEANUT_CONNECT_VERSION', '2.5.3');
 define('PEANUT_CONNECT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PEANUT_CONNECT_API_NAMESPACE', 'peanut-connect/v1');
 

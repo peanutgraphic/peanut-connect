@@ -969,28 +969,31 @@ class Peanut_Connect_API {
             ], 400);
         }
 
-        // Test the connection before saving
-        $test_result = Peanut_Connect_Hub_Sync::verify_hub_connection($hub_url, $api_key);
-
-        if (!$test_result['success']) {
-            return new WP_REST_Response([
-                'success' => false,
-                'message' => $test_result['message'] ?? __('Failed to connect to Hub.', 'peanut-connect'),
-            ], 400);
-        }
-
-        // Save settings
+        // Save settings first (verification happens on heartbeat)
         update_option('peanut_connect_hub_url', $hub_url);
         update_option('peanut_connect_hub_api_key', $api_key);
 
+        // Try to verify connection (optional - may fail due to server config)
+        $test_result = Peanut_Connect_Hub_Sync::verify_hub_connection($hub_url, $api_key);
+        $verified = $test_result['success'] ?? false;
+
         // Log activity
-        Peanut_Connect_Activity_Log::log('hub_connected', 'success', 0, [
+        Peanut_Connect_Activity_Log::log('hub_configured', $verified ? 'success' : 'pending', 0, [
             'hub_url' => $hub_url,
+            'verified' => $verified,
         ]);
+
+        // Trigger immediate heartbeat to sync with Hub
+        if ($verified) {
+            Peanut_Connect_Hub_Sync::send_heartbeat();
+        }
 
         return new WP_REST_Response([
             'success' => true,
-            'message' => __('Hub connection saved successfully.', 'peanut-connect'),
+            'message' => $verified
+                ? __('Hub connection saved and verified.', 'peanut-connect')
+                : __('Hub settings saved. Connection will be verified on next sync.', 'peanut-connect'),
+            'verified' => $verified,
             'data' => [
                 'site' => $test_result['site'] ?? [],
                 'client' => $test_result['client'] ?? [],

@@ -51,6 +51,11 @@ class Peanut_Connect_Popup_Display {
         // Get cached popups from last heartbeat
         $popups = get_option('peanut_connect_hub_popups', []);
 
+        // If no cached popups, try fetching from Hub via GET
+        if (empty($popups)) {
+            $popups = Peanut_Connect_Hub_Sync::fetch_popups();
+        }
+
         // Filter by targeting rules
         return array_filter($popups, [__CLASS__, 'matches_targeting']);
     }

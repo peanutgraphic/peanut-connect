@@ -507,6 +507,47 @@ class Peanut_Connect_Hub_Sync {
     }
 
     /**
+     * Fetch active popups from Hub via GET request
+     *
+     * @return array Array of popups or empty array on failure
+     */
+    public static function fetch_popups(): array {
+        $hub_url = get_option('peanut_connect_hub_url');
+        $api_key = get_option('peanut_connect_hub_api_key');
+
+        if (empty($hub_url) || empty($api_key)) {
+            return [];
+        }
+
+        $endpoint = rtrim($hub_url, '/') . '/api/v1/popups/active';
+
+        $response = wp_remote_get($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Accept' => 'application/json',
+            ],
+            'timeout' => 10,
+            'sslverify' => true,
+        ]);
+
+        if (is_wp_error($response)) {
+            return [];
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $status_code = wp_remote_retrieve_response_code($response);
+
+        if ($status_code >= 200 && $status_code < 300 && ($body['success'] ?? false)) {
+            $popups = $body['popups'] ?? [];
+            // Cache popups for future use
+            update_option('peanut_connect_hub_popups', $popups);
+            return $popups;
+        }
+
+        return [];
+    }
+
+    /**
      * Unschedule sync cron
      */
     public static function unschedule(): void {

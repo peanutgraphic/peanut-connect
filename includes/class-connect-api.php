@@ -668,6 +668,20 @@ class Peanut_Connect_API {
             'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('perform_updates'),
         ]);
 
+        // Get error log entries for Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/error-log', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_error_log_entries'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+            'args' => [
+                'limit' => [
+                    'default' => 50,
+                    'type' => 'integer',
+                    'sanitize_callback' => 'absint',
+                ],
+            ],
+        ]);
+
         // =====================
         // Hub Tracking endpoints (public, for frontend tracking)
         // =====================
@@ -2027,6 +2041,38 @@ class Peanut_Connect_API {
             'success' => true,
             'message' => __('Security settings updated.', 'peanut-connect'),
             'data' => $updated,
+        ], 200);
+    }
+
+    // =====================
+    // Hub Error Log Handlers
+    // =====================
+
+    /**
+     * Get error log entries for Hub
+     *
+     * Returns PHP error log entries captured by Peanut Connect's error logger.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with error log entries.
+     */
+    public function get_error_log_entries(WP_REST_Request $request): WP_REST_Response {
+        $limit = $request->get_param('limit') ?: 50;
+
+        // Initialize the error log class to set up paths
+        Peanut_Connect_Error_Log::init();
+
+        // Get entries
+        $entries = Peanut_Connect_Error_Log::get_entries($limit);
+
+        // Get counts for summary
+        $counts = Peanut_Connect_Error_Log::get_recent_counts();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'entries' => $entries,
+            'total' => count($entries),
+            'counts' => $counts,
         ], 200);
     }
 }

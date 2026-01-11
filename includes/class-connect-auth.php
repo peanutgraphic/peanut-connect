@@ -214,4 +214,99 @@ class Peanut_Connect_Auth {
 
         return 'default';
     }
+
+    /**
+     * Verify incoming request from Hub
+     *
+     * Validates the request against the Hub API key.
+     *
+     * @param WP_REST_Request $request The incoming REST request
+     * @return bool|WP_Error True if authenticated, WP_Error on failure
+     */
+    public static function verify_hub_request(WP_REST_Request $request): bool|WP_Error {
+        // Check rate limit first
+        $client_id = Peanut_Connect_Rate_Limiter::get_client_identifier($request);
+        $rate_check = Peanut_Connect_Rate_Limiter::check($client_id, 'hub');
+
+        if (is_wp_error($rate_check)) {
+            return $rate_check;
+        }
+
+        $auth_header = $request->get_header('Authorization');
+
+        if (empty($auth_header)) {
+            return new WP_Error(
+                'missing_authorization',
+                __('Authorization header is required.', 'peanut-connect'),
+                ['status' => 401]
+            );
+        }
+
+        // Extract Bearer token
+        if (!preg_match('/^Bearer\s+(.+)$/i', $auth_header, $matches)) {
+            return new WP_Error(
+                'invalid_authorization',
+                __('Invalid authorization format. Use Bearer token.', 'peanut-connect'),
+                ['status' => 401]
+            );
+        }
+
+        $provided_key = $matches[1];
+        $stored_key = get_option('peanut_connect_hub_api_key');
+
+        if (empty($stored_key)) {
+            return new WP_Error(
+                'not_configured',
+                __('Hub API key not configured. Please connect to Hub first.', 'peanut-connect'),
+                ['status' => 403]
+            );
+        }
+
+        // Timing-safe comparison
+        if (!hash_equals($stored_key, $provided_key)) {
+            return new WP_Error(
+                'invalid_key',
+                __('Invalid Hub API key.', 'peanut-connect'),
+                ['status' => 401]
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Permission callback for Hub endpoints
+     *
+     * @param WP_REST_Request $request The REST request
+     * @return bool|WP_Error True if authorized, WP_Error on failure
+     */
+    public static function hub_permission_callback(WP_REST_Request $request): bool|WP_Error {
+        return self::verify_hub_request($request);
+    }
+
+    /**
+     * Permission callback for Hub endpoints requiring specific permission
+     *
+     * @param string $permission The required permission
+     * @return callable Permission callback function
+     */
+    public static function hub_permission_callback_for(string $permission): callable {
+        return function(WP_REST_Request $request) use ($permission): bool|WP_Error {
+            $verified = self::verify_hub_request($request);
+
+            if (is_wp_error($verified)) {
+                return $verified;
+            }
+
+            if (!self::has_permission($permission)) {
+                return new WP_Error(
+                    'permission_denied',
+                    sprintf(__('Permission "%s" is not allowed on this site.', 'peanut-connect'), $permission),
+                    ['status' => 403]
+                );
+            }
+
+            return true;
+        };
+    }
 }

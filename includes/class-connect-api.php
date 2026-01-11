@@ -580,6 +580,95 @@ class Peanut_Connect_API {
         ]);
 
         // =====================
+        // Hub Management endpoints (authenticated via Hub API key)
+        // =====================
+
+        // Get all plugins for Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/plugins', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_all_plugins'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+        ]);
+
+        // Get all themes for Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/themes', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_all_themes'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+        ]);
+
+        // Update plugin from Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/plugin/update', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'perform_update'],
+            'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('perform_updates'),
+            'args' => [
+                'type' => [
+                    'default' => 'plugin',
+                    'type' => 'string',
+                ],
+                'slug' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
+        ]);
+
+        // Update theme from Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/theme/update', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'perform_update'],
+            'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('perform_updates'),
+            'args' => [
+                'type' => [
+                    'default' => 'theme',
+                    'type' => 'string',
+                ],
+                'slug' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
+        ]);
+
+        // Activate plugin from Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/plugin/activate', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'activate_plugin'],
+            'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('perform_updates'),
+            'args' => [
+                'plugin' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
+        ]);
+
+        // Deactivate plugin from Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/plugin/deactivate', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'deactivate_plugin'],
+            'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('perform_updates'),
+            'args' => [
+                'plugin' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
+        ]);
+
+        // Bulk update plugins from Hub
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/plugins/bulk-update', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'bulk_update_plugins'],
+            'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('perform_updates'),
+        ]);
+
+        // =====================
         // Hub Tracking endpoints (public, for frontend tracking)
         // =====================
 

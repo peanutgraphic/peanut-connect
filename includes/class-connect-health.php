@@ -188,10 +188,12 @@ class Peanut_Connect_Health {
         $update_plugins = get_site_transient('update_plugins');
         $updates_available = 0;
         $plugins_needing_update = [];
+        $update_lookup = [];
 
         if ($update_plugins && !empty($update_plugins->response)) {
             foreach ($update_plugins->response as $plugin_file => $plugin_data) {
                 $updates_available++;
+                $update_lookup[$plugin_file] = $plugin_data->new_version;
                 $plugins_needing_update[] = [
                     'slug' => dirname($plugin_file),
                     'file' => $plugin_file,
@@ -202,12 +204,39 @@ class Peanut_Connect_Health {
             }
         }
 
+        // Build full plugin list
+        $plugin_list = [];
+        foreach ($all_plugins as $plugin_file => $plugin_data) {
+            $is_active = in_array($plugin_file, $active_plugins, true);
+            $plugin_list[] = [
+                'file' => $plugin_file,
+                'slug' => dirname($plugin_file) !== '.' ? dirname($plugin_file) : basename($plugin_file, '.php'),
+                'name' => $plugin_data['Name'] ?? $plugin_file,
+                'version' => $plugin_data['Version'] ?? 'unknown',
+                'author' => $plugin_data['Author'] ?? 'Unknown',
+                'description' => wp_trim_words($plugin_data['Description'] ?? '', 20),
+                'active' => $is_active,
+                'update_available' => isset($update_lookup[$plugin_file]),
+                'new_version' => $update_lookup[$plugin_file] ?? null,
+                'plugin_uri' => $plugin_data['PluginURI'] ?? null,
+            ];
+        }
+
+        // Sort: active first, then alphabetically
+        usort($plugin_list, function ($a, $b) {
+            if ($a['active'] !== $b['active']) {
+                return $b['active'] - $a['active'];
+            }
+            return strcasecmp($a['name'], $b['name']);
+        });
+
         return [
             'total' => count($all_plugins),
             'active' => count($active_plugins),
             'inactive' => count($all_plugins) - count($active_plugins),
             'updates_available' => $updates_available,
             'needing_update' => $plugins_needing_update,
+            'list' => $plugin_list,
         ];
     }
 
@@ -217,15 +246,18 @@ class Peanut_Connect_Health {
     private static function get_themes_data(): array {
         $all_themes = wp_get_themes();
         $active_theme = wp_get_theme();
+        $active_stylesheet = get_stylesheet();
 
         // Check for updates
         $update_themes = get_site_transient('update_themes');
         $updates_available = 0;
         $themes_needing_update = [];
+        $update_lookup = [];
 
         if ($update_themes && !empty($update_themes->response)) {
             foreach ($update_themes->response as $stylesheet => $theme_data) {
                 $updates_available++;
+                $update_lookup[$stylesheet] = $theme_data['new_version'];
                 $theme = wp_get_theme($stylesheet);
                 $themes_needing_update[] = [
                     'slug' => $stylesheet,
@@ -236,12 +268,40 @@ class Peanut_Connect_Health {
             }
         }
 
+        // Build full theme list
+        $theme_list = [];
+        foreach ($all_themes as $stylesheet => $theme) {
+            $is_active = ($stylesheet === $active_stylesheet);
+            $theme_list[] = [
+                'slug' => $stylesheet,
+                'name' => $theme->get('Name'),
+                'version' => $theme->get('Version'),
+                'author' => $theme->get('Author'),
+                'description' => wp_trim_words($theme->get('Description'), 20),
+                'active' => $is_active,
+                'parent' => $theme->parent() ? $theme->parent()->get_stylesheet() : null,
+                'update_available' => isset($update_lookup[$stylesheet]),
+                'new_version' => $update_lookup[$stylesheet] ?? null,
+                'screenshot' => $theme->get_screenshot(),
+            ];
+        }
+
+        // Sort: active first, then alphabetically
+        usort($theme_list, function ($a, $b) {
+            if ($a['active'] !== $b['active']) {
+                return $b['active'] - $a['active'];
+            }
+            return strcasecmp($a['name'], $b['name']);
+        });
+
         return [
             'total' => count($all_themes),
             'active' => $active_theme->get('Name'),
+            'active_stylesheet' => $active_stylesheet,
             'active_version' => $active_theme->get('Version'),
             'updates_available' => $updates_available,
             'needing_update' => $themes_needing_update,
+            'list' => $theme_list,
         ];
     }
 

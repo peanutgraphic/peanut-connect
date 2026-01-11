@@ -1250,45 +1250,48 @@ class Peanut_Connect_API {
         $issues = [];
         $status = 'healthy';
 
-        // Check for issues
-        if ($health_data['wordpress']['needs_update']) {
+        // Check for issues (with null safety)
+        if (!empty($health_data['wordpress']['needs_update'])) {
             $issues[] = 'WordPress core update available';
             $status = 'warning';
         }
-        if (!$health_data['php']['is_recommended']) {
-            $issues[] = 'PHP version is below recommended (' . $health_data['php']['recommended'] . ')';
-            if (!$health_data['php']['is_minimum']) {
+        if (isset($health_data['php']) && !($health_data['php']['is_recommended'] ?? true)) {
+            $issues[] = 'PHP version is below recommended (' . ($health_data['php']['recommended'] ?? '8.0') . ')';
+            if (!($health_data['php']['is_minimum'] ?? true)) {
                 $status = 'critical';
             } elseif ($status !== 'critical') {
                 $status = 'warning';
             }
         }
-        if (!$health_data['ssl']['enabled']) {
+        if (isset($health_data['ssl']) && !($health_data['ssl']['enabled'] ?? true)) {
             $issues[] = 'SSL is not enabled';
             $status = 'critical';
-        } elseif ($health_data['ssl']['days_until_expiry'] !== null && $health_data['ssl']['days_until_expiry'] < 14) {
+        } elseif (isset($health_data['ssl']['days_until_expiry']) && $health_data['ssl']['days_until_expiry'] < 14) {
             $issues[] = 'SSL certificate expiring soon (' . $health_data['ssl']['days_until_expiry'] . ' days)';
             if ($status !== 'critical') {
                 $status = 'warning';
             }
         }
-        if ($health_data['plugins']['updates_available'] > 0) {
-            $issues[] = $health_data['plugins']['updates_available'] . ' plugin update(s) available';
+        $plugins_updates = $health_data['plugins']['updates_available'] ?? 0;
+        if ($plugins_updates > 0) {
+            $issues[] = $plugins_updates . ' plugin update(s) available';
             if ($status !== 'critical') {
                 $status = 'warning';
             }
         }
-        if ($health_data['themes']['updates_available'] > 0) {
-            $issues[] = $health_data['themes']['updates_available'] . ' theme update(s) available';
+        $themes_updates = $health_data['themes']['updates_available'] ?? 0;
+        if ($themes_updates > 0) {
+            $issues[] = $themes_updates . ' theme update(s) available';
             if ($status !== 'critical') {
                 $status = 'warning';
             }
         }
-        if ($health_data['disk_space']['used_percentage'] > 90) {
-            $issues[] = 'Disk space is running low (' . $health_data['disk_space']['used_percentage'] . '% used)';
+        $disk_used = $health_data['disk_space']['used_percentage'] ?? 0;
+        if ($disk_used > 90) {
+            $issues[] = 'Disk space is running low (' . $disk_used . '% used)';
             $status = 'critical';
-        } elseif ($health_data['disk_space']['used_percentage'] > 80) {
-            $issues[] = 'Disk space is getting low (' . $health_data['disk_space']['used_percentage'] . '% used)';
+        } elseif ($disk_used > 80) {
+            $issues[] = 'Disk space is getting low (' . $disk_used . '% used)';
             if ($status !== 'critical') {
                 $status = 'warning';
             }

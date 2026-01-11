@@ -1322,9 +1322,9 @@ class Peanut_Connect_API {
                     'issues' => $issues,
                 ],
                 'updates' => [
-                    'plugins' => count($updates['plugins']),
-                    'themes' => count($updates['themes']),
-                    'core' => $updates['core']['needs_update'],
+                    'plugins' => count($updates['plugins'] ?? []),
+                    'themes' => count($updates['themes'] ?? []),
+                    'core' => $updates['core']['needs_update'] ?? false,
                 ],
                 'peanut_suite' => $peanut_suite,
             ],

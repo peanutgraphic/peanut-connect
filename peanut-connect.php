@@ -3,7 +3,7 @@
  * Plugin Name: Peanut Connect
  * Plugin URI: https://peanutgraphic.com/peanut-connect
  * Description: Lightweight connector plugin for Peanut Monitor. Allows centralized site management from your manager site.
- * Version: 2.5.8
+ * Version: 2.6.2
  * Author: Peanut Graphic
  * Author URI: https://peanutgraphic.com
  * License: GPL-2.0-or-later
@@ -17,9 +17,19 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PEANUT_CONNECT_VERSION', '2.5.8');
+define('PEANUT_CONNECT_VERSION', '2.6.2');
 define('PEANUT_CONNECT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PEANUT_CONNECT_API_NAMESPACE', 'peanut-connect/v1');
+
+/**
+ * Early Hub Mode filter registration
+ * Must happen at file load time (before Suite checks the filter)
+ */
+$peanut_connect_hub_mode = get_option('peanut_connect_hub_mode', 'standard');
+if ($peanut_connect_hub_mode === 'disable_suite') {
+    add_filter('peanut_suite_disabled', '__return_true');
+}
+unset($peanut_connect_hub_mode);
 
 /**
  * Main Peanut Connect class
@@ -117,6 +127,54 @@ final class Peanut_Connect {
 
         // Register custom cron schedule
         add_filter('cron_schedules', [$this, 'add_cron_schedules']);
+
+        // Hub Mode: Hide/disable Suite when connected to Hub (v2.6.0+)
+        if ($this->is_hub_connected()) {
+            $this->init_hub_mode();
+        }
+    }
+
+    /**
+     * Initialize Hub Mode features
+     * When connected to Hub, Suite becomes optional/hidden
+     */
+    private function init_hub_mode(): void {
+        $hub_mode = get_option('peanut_connect_hub_mode', 'standard');
+
+        // Provide filter for other plugins to check Hub Mode status
+        add_filter('peanut_connect_hub_mode_active', '__return_true');
+        add_filter('peanut_connect_hub_mode', fn() => $hub_mode);
+
+        // Hide Suite admin menu
+        if ($hub_mode === 'hide_suite' || $hub_mode === 'disable_suite') {
+            add_action('admin_menu', [$this, 'hide_suite_menu'], 999);
+            add_filter('peanut_suite_admin_menu_hidden', '__return_true');
+        }
+
+        // Disable Suite entirely (prevents loading modules)
+        if ($hub_mode === 'disable_suite') {
+            add_filter('peanut_suite_disabled', '__return_true');
+            // Prevent Suite from initializing
+            add_action('plugins_loaded', [$this, 'disable_suite_loading'], 1);
+        }
+    }
+
+    /**
+     * Hide Peanut Suite admin menu
+     */
+    public function hide_suite_menu(): void {
+        remove_menu_page('peanut-app');
+    }
+
+    /**
+     * Prevent Suite from loading when in disable mode
+     */
+    public function disable_suite_loading(): void {
+        // Remove Suite's main initialization hooks
+        // Suite should check the 'peanut_suite_disabled' filter before initializing
+        if (class_exists('Peanut_Suite')) {
+            remove_all_actions('plugins_loaded', 10);
+        }
     }
 
     /**
@@ -289,6 +347,21 @@ final class Peanut_Connect {
                 'access_analytics' => true,
             ],
         ]);
+
+        // Hub Mode setting (v2.6.0+)
+        register_setting('peanut_connect', 'peanut_connect_hub_mode', [
+            'type' => 'string',
+            'sanitize_callback' => [$this, 'sanitize_hub_mode'],
+            'default' => 'standard',
+        ]);
+    }
+
+    /**
+     * Sanitize hub mode setting
+     */
+    public function sanitize_hub_mode(string $input): string {
+        $valid = ['standard', 'hide_suite', 'disable_suite'];
+        return in_array($input, $valid, true) ? $input : 'standard';
     }
 
     /**

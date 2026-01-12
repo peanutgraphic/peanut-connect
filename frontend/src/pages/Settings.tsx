@@ -36,6 +36,8 @@ import {
   Cloud,
   Link2,
   Send,
+  EyeOff,
+  Power,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { Permissions } from '@/types';
@@ -148,6 +150,18 @@ export default function Settings() {
     },
     onError: (err) => {
       toast.error((err as Error).message || 'Sync failed');
+    },
+  });
+
+  const updateHubModeMutation = useMutation({
+    mutationFn: (mode: 'standard' | 'hide_suite' | 'disable_suite') =>
+      settingsApi.updateHubMode(mode),
+    onSuccess: () => {
+      toast.success('Hub mode updated');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to update hub mode');
     },
   });
 
@@ -575,6 +589,107 @@ export default function Settings() {
               >
                 Disconnect
               </Button>
+            </div>
+
+            {/* Hub Mode Setting */}
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Power className="w-4 h-4 text-slate-600" />
+                <span className="font-medium text-slate-900">Hub Mode</span>
+                <HelpTooltip content="When using Hub as your primary platform, you can hide or disable Peanut Suite on this site to avoid duplicate features." />
+              </div>
+              <p className="text-sm text-slate-600 mb-4">
+                Choose how Peanut Suite behaves when connected to Hub.
+              </p>
+              <div className="space-y-3">
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    (settings?.hub?.mode || 'standard') === 'standard'
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="hubMode"
+                    value="standard"
+                    checked={(settings?.hub?.mode || 'standard') === 'standard'}
+                    onChange={() => updateHubModeMutation.mutate('standard')}
+                    className="mt-0.5"
+                    disabled={updateHubModeMutation.isPending}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-4 h-4 text-slate-600" />
+                      <span className="font-medium text-slate-900">Standard</span>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Peanut Suite works normally alongside Hub. Use both interfaces.
+                    </p>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    settings?.hub?.mode === 'hide_suite'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="hubMode"
+                    value="hide_suite"
+                    checked={settings?.hub?.mode === 'hide_suite'}
+                    onChange={() => updateHubModeMutation.mutate('hide_suite')}
+                    className="mt-0.5"
+                    disabled={updateHubModeMutation.isPending}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <EyeOff className="w-4 h-4 text-amber-600" />
+                      <span className="font-medium text-slate-900">Hide Suite Menu</span>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Hide Peanut Suite from the admin menu. Suite still runs in the background.
+                    </p>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    settings?.hub?.mode === 'disable_suite'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="hubMode"
+                    value="disable_suite"
+                    checked={settings?.hub?.mode === 'disable_suite'}
+                    onChange={() => updateHubModeMutation.mutate('disable_suite')}
+                    className="mt-0.5"
+                    disabled={updateHubModeMutation.isPending}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Power className="w-4 h-4 text-red-600" />
+                      <span className="font-medium text-slate-900">Disable Suite</span>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Fully disable Peanut Suite. Hub becomes the only interface.
+                    </p>
+                    <p className="text-xs text-red-600 mt-1">
+                      <AlertTriangle className="w-3 h-3 inline mr-1" />
+                      Suite features won't run. Only use if Hub has all features you need.
+                    </p>
+                  </div>
+                </label>
+              </div>
+              {updateHubModeMutation.isPending && (
+                <p className="text-sm text-slate-500 mt-2">Updating mode...</p>
+              )}
             </div>
           </div>
         ) : (

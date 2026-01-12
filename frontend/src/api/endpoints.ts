@@ -78,6 +78,15 @@ export const settingsApi = {
     const response = await api.post('/settings/hub/sync');
     return response.data;
   },
+
+  // Hub settings - update hub mode
+  updateHubMode: async (mode: 'standard' | 'hide_suite' | 'disable_suite'): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const response = await api.post('/settings/hub/mode', { mode });
+    return response.data;
+  },
 };
 
 // Health API

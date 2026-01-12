@@ -94,6 +94,21 @@ class Peanut_Connect_API {
             'permission_callback' => [$this, 'admin_permission_check'],
         ]);
 
+        // Hub settings - update mode (v2.6.0+)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/hub/mode', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'update_hub_mode'],
+            'permission_callback' => [$this, 'admin_permission_check'],
+            'args' => [
+                'mode' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'enum' => ['standard', 'hide_suite', 'disable_suite'],
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
+        ]);
+
         // Dashboard data
         register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/dashboard', [
             'methods' => WP_REST_Server::READABLE,
@@ -991,6 +1006,7 @@ class Peanut_Connect_API {
         $hub_url = get_option('peanut_connect_hub_url');
         $hub_api_key = get_option('peanut_connect_hub_api_key');
         $hub_last_sync = get_option('peanut_connect_last_hub_sync');
+        $hub_mode = get_option('peanut_connect_hub_mode', 'standard');
 
         return new WP_REST_Response([
             'success' => true,
@@ -1007,6 +1023,7 @@ class Peanut_Connect_API {
                     'api_key' => $hub_api_key ? substr($hub_api_key, 0, 8) . '...' . substr($hub_api_key, -4) : '',
                     'api_key_set' => !empty($hub_api_key),
                     'last_sync' => $hub_last_sync,
+                    'mode' => $hub_mode,
                 ],
                 'permissions' => $permissions,
                 'peanut_suite' => $peanut_suite,
@@ -1169,6 +1186,35 @@ class Peanut_Connect_API {
                 ? __('Sync completed successfully.', 'peanut-connect')
                 : ($heartbeat_result['message'] ?? __('Sync failed.', 'peanut-connect')),
         ], $heartbeat_result['success'] ? 200 : 400);
+    }
+
+    /**
+     * Update Hub Mode setting (v2.6.0+)
+     *
+     * Controls how Peanut Suite behaves when connected to Hub:
+     * - standard: Suite works normally
+     * - hide_suite: Suite menu hidden but still runs
+     * - disable_suite: Suite fully disabled
+     */
+    public function update_hub_mode(WP_REST_Request $request): WP_REST_Response {
+        $mode = $request->get_param('mode');
+
+        // Validate mode (already validated by REST API args, but double-check)
+        $valid_modes = ['standard', 'hide_suite', 'disable_suite'];
+        if (!in_array($mode, $valid_modes, true)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => __('Invalid hub mode.', 'peanut-connect'),
+            ], 400);
+        }
+
+        update_option('peanut_connect_hub_mode', $mode);
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => __('Hub mode updated.', 'peanut-connect'),
+            'mode' => $mode,
+        ], 200);
     }
 
     /**
@@ -1683,6 +1729,7 @@ class Peanut_Connect_API {
         $hub_url = $request->get_param('hub_url');
         $api_key = $request->get_param('api_key');
         $tracking_enabled = $request->get_param('tracking_enabled');
+        $hub_mode = $request->get_param('mode');
 
         // Validate and save hub URL
         if ($hub_url !== null) {
@@ -1698,6 +1745,14 @@ class Peanut_Connect_API {
         // Save tracking enabled setting
         if ($tracking_enabled !== null) {
             update_option('peanut_connect_tracking_enabled', (bool) $tracking_enabled);
+        }
+
+        // Save Hub Mode setting (v2.6.0+)
+        if ($hub_mode !== null) {
+            $valid_modes = ['standard', 'hide_suite', 'disable_suite'];
+            if (in_array($hub_mode, $valid_modes, true)) {
+                update_option('peanut_connect_hub_mode', $hub_mode);
+            }
         }
 
         return new WP_REST_Response([

@@ -28,6 +28,7 @@ export interface HubStatus {
   api_key: string;
   api_key_set: boolean;
   last_sync: string | null;
+  mode: 'standard' | 'hide_suite' | 'disable_suite';
 }
 
 // Settings

@@ -5,6 +5,25 @@ All notable changes to Peanut Connect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-01-11
+
+### Fixed
+- Hub Mode disable_suite now fully disables Suite at file load time (early filter registration)
+
+## [2.6.1] - 2026-01-11
+
+### Fixed
+- Hub Mode hide_suite now correctly hides Peanut Suite menu (was using wrong menu slug)
+
+## [2.6.0] - 2026-01-11
+
+### Added
+- Hub Mode feature to control Peanut Suite behavior when connected to Hub
+  - Standard: Suite works normally alongside Hub
+  - Hide Suite Menu: Hides Peanut Suite from admin menu
+  - Disable Suite: Fully disables Peanut Suite
+- New `/settings/hub/mode` API endpoint
+
 ## [Unreleased]
 
 ### Added

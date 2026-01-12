@@ -117,7 +117,10 @@ class Peanut_Connect_Health {
             return $cached;
         }
 
-        $is_ssl = is_ssl();
+        // Check if site URL uses HTTPS (is_ssl() fails in WP-CLI context)
+        $site_url = get_site_url();
+        $is_ssl = strpos($site_url, 'https://') === 0;
+
         $data = [
             'enabled' => $is_ssl,
             'valid' => $is_ssl,
@@ -126,7 +129,6 @@ class Peanut_Connect_Health {
         ];
 
         if ($is_ssl) {
-            $site_url = get_site_url();
             $parsed = wp_parse_url($site_url);
             $host = $parsed['host'] ?? '';
 

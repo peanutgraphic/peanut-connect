@@ -3,7 +3,7 @@
  * Plugin Name: Peanut Connect
  * Plugin URI: https://peanutgraphic.com/peanut-connect
  * Description: Lightweight connector plugin for Peanut Monitor. Allows centralized site management from your manager site.
- * Version: 2.6.2
+ * Version: 2.6.3
  * Author: Peanut Graphic
  * Author URI: https://peanutgraphic.com
  * License: GPL-2.0-or-later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PEANUT_CONNECT_VERSION', '2.6.2');
+define('PEANUT_CONNECT_VERSION', '2.6.3');
 define('PEANUT_CONNECT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PEANUT_CONNECT_API_NAMESPACE', 'peanut-connect/v1');
 
@@ -123,6 +123,12 @@ final class Peanut_Connect {
             if (!wp_next_scheduled('peanut_connect_hub_heartbeat')) {
                 wp_schedule_event(time(), 'hourly', 'peanut_connect_hub_heartbeat');
             }
+        }
+
+        // Schedule daily cleanup of old synced records (v2.6.3+)
+        add_action('peanut_connect_cleanup', [Peanut_Connect_Database::class, 'cleanup_old_records']);
+        if (!wp_next_scheduled('peanut_connect_cleanup')) {
+            wp_schedule_event(time(), 'daily', 'peanut_connect_cleanup');
         }
 
         // Register custom cron schedule
@@ -626,4 +632,5 @@ register_deactivation_hook(__FILE__, function() {
     // Clear Hub sync cron jobs (v2.3.0+)
     wp_clear_scheduled_hook('peanut_connect_hub_sync');
     wp_clear_scheduled_hook('peanut_connect_hub_heartbeat');
+    wp_clear_scheduled_hook('peanut_connect_cleanup');
 });

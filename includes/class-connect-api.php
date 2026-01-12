@@ -1593,9 +1593,40 @@ class Peanut_Connect_API {
     // =====================
 
     /**
+     * Check rate limit for tracking endpoints
+     *
+     * @param WP_REST_Request $request The request object.
+     * @param string $endpoint Endpoint identifier for rate limiting.
+     * @return WP_REST_Response|null Returns response if rate limited, null if allowed.
+     */
+    private function check_tracking_rate_limit(WP_REST_Request $request, string $endpoint): ?WP_REST_Response {
+        $client_id = Peanut_Connect_Rate_Limiter::get_client_identifier($request);
+        $result = Peanut_Connect_Rate_Limiter::check($client_id, $endpoint);
+
+        if (is_wp_error($result)) {
+            $data = $result->get_error_data();
+            $response = new WP_REST_Response([
+                'success' => false,
+                'code' => 'rate_limit_exceeded',
+                'message' => $result->get_error_message(),
+            ], 429);
+            $response->header('Retry-After', $data['retry_after'] ?? 60);
+            return $response;
+        }
+
+        return null;
+    }
+
+    /**
      * Track event (pageview, click, etc.)
      */
     public function track_event(WP_REST_Request $request): WP_REST_Response {
+        // Check rate limit
+        $rate_limited = $this->check_tracking_rate_limit($request, 'track');
+        if ($rate_limited) {
+            return $rate_limited;
+        }
+
         if (!class_exists('Peanut_Connect_Tracker')) {
             return new WP_REST_Response(['success' => false, 'message' => 'Tracking not initialized'], 500);
         }
@@ -1622,6 +1653,12 @@ class Peanut_Connect_API {
      * Identify visitor (attach email/name)
      */
     public function identify_visitor(WP_REST_Request $request): WP_REST_Response {
+        // Check rate limit
+        $rate_limited = $this->check_tracking_rate_limit($request, 'identify');
+        if ($rate_limited) {
+            return $rate_limited;
+        }
+
         if (!class_exists('Peanut_Connect_Tracker')) {
             return new WP_REST_Response(['success' => false, 'message' => 'Tracking not initialized'], 500);
         }
@@ -1641,6 +1678,12 @@ class Peanut_Connect_API {
      * Track conversion
      */
     public function track_conversion(WP_REST_Request $request): WP_REST_Response {
+        // Check rate limit
+        $rate_limited = $this->check_tracking_rate_limit($request, 'conversion');
+        if ($rate_limited) {
+            return $rate_limited;
+        }
+
         if (!class_exists('Peanut_Connect_Tracker')) {
             return new WP_REST_Response(['success' => false, 'message' => 'Tracking not initialized'], 500);
         }
@@ -1669,6 +1712,12 @@ class Peanut_Connect_API {
      * Track popup interaction
      */
     public function track_popup_interaction(WP_REST_Request $request): WP_REST_Response {
+        // Check rate limit
+        $rate_limited = $this->check_tracking_rate_limit($request, 'popup_interaction');
+        if ($rate_limited) {
+            return $rate_limited;
+        }
+
         if (!class_exists('Peanut_Connect_Tracker')) {
             return new WP_REST_Response(['success' => false, 'message' => 'Tracking not initialized'], 500);
         }

@@ -208,6 +208,24 @@ class Peanut_Connect_Rate_Limiter {
                 'window' => self::AUTH_WINDOW,
             ],
 
+            // Tracking endpoints (higher limits for frontend JS)
+            'track' => [
+                'limit' => 120,  // 2 events per second max
+                'window' => 60,
+            ],
+            'identify' => [
+                'limit' => 30,
+                'window' => 60,
+            ],
+            'conversion' => [
+                'limit' => 30,
+                'window' => 60,
+            ],
+            'popup_interaction' => [
+                'limit' => 60,
+                'window' => 60,
+            ],
+
             // Standard endpoints
             'health' => [
                 'limit' => 30,

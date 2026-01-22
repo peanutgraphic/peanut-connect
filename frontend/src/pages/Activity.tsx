@@ -18,10 +18,8 @@ import {
   Info,
   Trash2,
   RefreshCw,
-  Shield,
   Download,
   Link2,
-  Key,
   Settings,
   Heart,
   ClipboardList,
@@ -55,10 +53,8 @@ const typeConfig: Record<ActivityType, { icon: typeof Activity; label: string }>
   health_check: { icon: Heart, label: 'Health Check' },
   update_installed: { icon: Download, label: 'Update' },
   update_failed: { icon: XCircle, label: 'Update Failed' },
-  connection_established: { icon: Link2, label: 'Connected' },
-  connection_lost: { icon: Link2, label: 'Disconnected' },
-  key_regenerated: { icon: Key, label: 'Key Changed' },
-  permission_changed: { icon: Shield, label: 'Permission' },
+  hub_connected: { icon: Link2, label: 'Hub Connected' },
+  hub_disconnected: { icon: Link2, label: 'Hub Disconnected' },
   settings_changed: { icon: Settings, label: 'Settings' },
 };
 

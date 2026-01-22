@@ -48,7 +48,15 @@ api.interceptors.response.use(
       if (!data.success) {
         return Promise.reject(new Error(data.message || 'Request failed'));
       }
-      return { ...response, data: data.data };
+      // Preserve message alongside inner data for mutation handlers
+      return {
+        ...response,
+        data: {
+          ...data.data,
+          message: data.message,
+          success: data.success,
+        },
+      };
     }
     return response;
   },

@@ -1,60 +1,36 @@
 import api from './client';
 import type {
   Settings,
-  Permissions,
   HealthData,
   AvailableUpdates,
   UpdateResult,
-  VerifyResponse,
-  AnalyticsData,
   ErrorLogData,
   ErrorCountsData,
   ErrorLevel,
+  SecuritySettings,
+  HubPermissions,
 } from '@/types';
 
-// Settings API
+// Settings API (Hub-focused)
 export const settingsApi = {
-  // Get current settings (connection, permissions, etc.)
+  // Get current settings
   get: async (): Promise<Settings> => {
     const response = await api.get('/settings');
     return response.data;
   },
 
-  // Update permissions
-  updatePermissions: async (permissions: Partial<Permissions>): Promise<Permissions> => {
-    const response = await api.post('/settings/permissions', permissions);
-    return response.data;
-  },
-
-  // Generate new site key
-  generateKey: async (): Promise<{ site_key: string }> => {
-    const response = await api.post('/settings/generate-key');
-    return response.data;
-  },
-
-  // Regenerate site key
-  regenerateKey: async (): Promise<{ site_key: string }> => {
-    const response = await api.post('/settings/regenerate-key');
-    return response.data;
-  },
-
-  // Disconnect from manager
-  disconnect: async (): Promise<{ success: boolean }> => {
-    const response = await api.post('/settings/disconnect');
-    return response.data;
-  },
-
-  // Hub settings - save
-  saveHubSettings: async (hubUrl: string, apiKey: string): Promise<{
+  // Hub settings - auto-connect (generates key locally and sends to Hub)
+  autoConnectToHub: async (hubUrl: string): Promise<{
     success: boolean;
     message: string;
+    code?: string;
     data?: {
       site: Record<string, unknown>;
       client: Record<string, unknown>;
       agency: Record<string, unknown>;
     };
   }> => {
-    const response = await api.post('/settings/hub', { hub_url: hubUrl, api_key: apiKey });
+    const response = await api.post('/settings/hub/connect', { hub_url: hubUrl });
     return response.data;
   },
 
@@ -87,6 +63,15 @@ export const settingsApi = {
     const response = await api.post('/settings/hub/mode', { mode });
     return response.data;
   },
+
+  // Update tracking enabled
+  updateTracking: async (enabled: boolean): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const response = await api.post('/hub/settings', { tracking_enabled: enabled });
+    return response.data;
+  },
 };
 
 // Health API
@@ -113,31 +98,13 @@ export const updatesApi = {
   },
 };
 
-// Verify API (used by manager site)
-export const verifyApi = {
-  // Verify connection
-  verify: async (): Promise<VerifyResponse> => {
-    const response = await api.get('/verify');
-    return response.data;
-  },
-};
-
-// Analytics API (if Peanut Suite is installed)
-export const analyticsApi = {
-  // Get analytics data
-  get: async (days: number = 30): Promise<AnalyticsData> => {
-    const response = await api.get('/analytics', { params: { days } });
-    return response.data;
-  },
-};
-
 // Dashboard API (combined data for dashboard)
 export const dashboardApi = {
   // Get dashboard data
   get: async (): Promise<{
-    connection: {
+    hub: {
       connected: boolean;
-      manager_url: string | null;
+      url: string;
       last_sync: string | null;
     };
     health_summary: {
@@ -190,6 +157,58 @@ export const errorLogApi = {
   // Update error logging settings
   updateSettings: async (enabled: boolean): Promise<{ logging_enabled: boolean }> => {
     const response = await api.put('/errors/settings', { enabled });
+    return response.data;
+  },
+};
+
+// Security Settings API
+export const securityApi = {
+  // Get security settings
+  get: async (): Promise<SecuritySettings> => {
+    const response = await api.get('/security');
+    return response.data.data;
+  },
+
+  // Update security settings
+  update: async (settings: Partial<{
+    hide_login_enabled: boolean;
+    hide_login_slug: string;
+    disable_comments: boolean;
+    hide_existing_comments: boolean;
+    disable_xmlrpc: boolean;
+    remove_version: boolean;
+  }>): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post('/security', settings);
+    return response.data;
+  },
+};
+
+// Hub Permissions API
+export const permissionsApi = {
+  // Get hub permissions
+  get: async (): Promise<HubPermissions> => {
+    const response = await api.get('/permissions');
+    return response.data;
+  },
+
+  // Update hub permissions
+  update: async (permissions: Partial<HubPermissions>): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const response = await api.post('/permissions', permissions);
+    return response.data;
+  },
+};
+
+// Tracking Settings API
+export const trackingApi = {
+  // Update track logged-in users setting
+  updateTrackLoggedIn: async (enabled: boolean): Promise<{
+    success: boolean;
+    message: string;
+  }> => {
+    const response = await api.post('/hub/settings', { track_logged_in: enabled });
     return response.data;
   },
 };

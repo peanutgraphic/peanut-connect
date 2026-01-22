@@ -15,7 +15,7 @@ import {
 } from '@/components/common';
 import { dashboardApi, settingsApi } from '@/api';
 import {
-  Link2,
+  Cloud,
   CheckCircle2,
   XCircle,
   AlertTriangle,
@@ -101,8 +101,8 @@ export default function Dashboard() {
                        (dashboard?.updates.themes || 0) +
                        (dashboard?.updates.core ? 1 : 0);
 
-  const isConnected = dashboard?.connection.connected;
-  const showWelcome = !isConnected && !settings?.connection?.site_key;
+  const isConnected = dashboard?.hub?.connected;
+  const showWelcome = !isConnected;
 
   return (
     <Layout title="Dashboard" description="Site connection overview">
@@ -114,8 +114,7 @@ export default function Dashboard() {
           className="mb-6"
         >
           <p className="mb-3">
-            Peanut Connect allows you to remotely monitor and manage this WordPress site from a central manager dashboard.
-            Here's what you can do:
+            Connect this WordPress site to Peanut Hub to enable remote monitoring and management from your agency dashboard.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
             <div className="flex items-start gap-2">
@@ -145,7 +144,7 @@ export default function Dashboard() {
               to="/settings"
               className="inline-flex items-center gap-1 text-sm font-medium text-purple-700 hover:text-purple-900"
             >
-              Get started by generating a site key
+              Get started by connecting to Hub
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -156,8 +155,8 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500">
-            Last updated: {dashboard?.connection.last_sync
-              ? formatDistanceToNow(new Date(dashboard.connection.last_sync), { addSuffix: true })
+            Last sync: {dashboard?.hub?.last_sync
+              ? formatDistanceToNow(new Date(dashboard.hub.last_sync), { addSuffix: true })
               : 'Never'}
           </span>
         </div>
@@ -177,12 +176,12 @@ export default function Dashboard() {
         <StatCard
           title={
             <span className="flex items-center gap-1.5">
-              Connection Status
-              <HelpTooltip content="Shows whether this site is connected to a Peanut Manager. A connected site can be monitored and managed remotely." />
+              Hub Connection
+              <HelpTooltip content="Shows whether this site is connected to Peanut Hub. A connected site can be monitored and managed remotely from your agency dashboard." />
             </span>
           }
-          value={dashboard?.connection.connected ? 'Connected' : 'Disconnected'}
-          icon={<Link2 className="w-5 h-5" />}
+          value={dashboard?.hub?.connected ? 'Connected' : 'Disconnected'}
+          icon={<Cloud className="w-5 h-5" />}
         />
         <StatCard
           title={
@@ -209,7 +208,7 @@ export default function Dashboard() {
           title={
             <span className="flex items-center gap-1.5">
               Peanut Suite
-              <HelpTooltip content="Peanut Suite provides marketing tools including UTM tracking, link management, contacts, and analytics. When installed, data syncs with your manager." />
+              <HelpTooltip content="Peanut Suite provides marketing tools including UTM tracking, link management, contacts, and analytics. Data syncs with Hub when installed." />
             </span>
           }
           value={dashboard?.peanut_suite?.installed ? 'Active' : 'Not Installed'}
@@ -245,42 +244,42 @@ export default function Dashboard() {
         </Recommendation>
       )}
 
-      {/* Connection Card */}
+      {/* Hub Connection Card */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 mt-6">
         <Card>
           <CardHeader
             title={
               <span className="flex items-center gap-2">
-                Connection Status
-                <HelpTooltip content="Connection to your Peanut Manager site. When connected, you can monitor and manage this site remotely from your manager dashboard." />
+                Hub Connection
+                <HelpTooltip content="Connection to Peanut Hub. When connected, you can monitor and manage this site remotely from your agency dashboard." />
               </span>
             }
             action={
-              dashboard?.connection.connected ? (
+              dashboard?.hub?.connected ? (
                 <Badge variant="success">Connected</Badge>
               ) : (
                 <Badge variant="danger">Disconnected</Badge>
               )
             }
           />
-          {dashboard?.connection.connected ? (
+          {dashboard?.hub?.connected ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="w-5 h-5" />
-                <span className="font-medium">Connected to Manager</span>
+                <span className="font-medium">Connected to Hub</span>
               </div>
-              {dashboard.connection.manager_url && (
+              {dashboard.hub.url && (
                 <div className="p-3 bg-slate-50 rounded-lg">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Manager URL</p>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Hub URL</p>
                   <p className="text-sm text-slate-700 font-mono break-all">
-                    {dashboard.connection.manager_url}
+                    {dashboard.hub.url}
                   </p>
                 </div>
               )}
-              {dashboard.connection.last_sync && (
+              {dashboard.hub.last_sync && (
                 <p className="text-sm text-slate-500">
                   Last sync:{' '}
-                  {formatDistanceToNow(new Date(dashboard.connection.last_sync), {
+                  {formatDistanceToNow(new Date(dashboard.hub.last_sync), {
                     addSuffix: true,
                   })}
                 </p>
@@ -288,9 +287,9 @@ export default function Dashboard() {
               <InfoPanel variant="success" title="What this means" collapsible defaultOpen={false}>
                 <ul className="text-sm space-y-1 mt-1">
                   <li>• Your site health is being monitored</li>
-                  <li>• Updates can be performed remotely</li>
-                  <li>• Security alerts will be sent to your manager</li>
-                  <li>• Analytics data is synced (if Peanut Suite is active)</li>
+                  <li>• Updates can be performed remotely from Hub</li>
+                  <li>• Security alerts are tracked</li>
+                  <li>• Analytics data syncs with Hub (if Peanut Suite is active)</li>
                 </ul>
               </InfoPanel>
             </div>
@@ -298,22 +297,22 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-amber-600">
                 <AlertTriangle className="w-5 h-5" />
-                <span className="font-medium">Not connected to any manager site</span>
+                <span className="font-medium">Not connected to Hub</span>
               </div>
               <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <h4 className="font-medium text-slate-900 mb-2">How to Connect</h4>
                 <ol className="text-sm text-slate-600 space-y-2">
                   <li className="flex items-start gap-2">
                     <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
-                    Go to <Link to="/settings" className="text-primary-600 hover:underline">Settings</Link> and generate a site key
+                    Make sure this site exists in your Hub dashboard
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
-                    Copy the site key and your site URL
+                    Go to <Link to="/settings" className="text-primary-600 hover:underline">Settings</Link> and enter your Hub URL
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
-                    Add this site in your Peanut Manager dashboard
+                    Click "Connect to Hub" - connection is automatic!
                   </li>
                 </ol>
               </div>
@@ -475,7 +474,7 @@ export default function Dashboard() {
             title={
               <span className="flex items-center gap-2">
                 Peanut Suite Integration
-                <HelpTooltip content="Peanut Suite is a marketing toolkit that includes UTM tracking, link shortening, contact management, popups, and analytics. Data syncs with your manager." />
+                <HelpTooltip content="Peanut Suite is a marketing toolkit that includes UTM tracking, link shortening, contact management, popups, and analytics. Data syncs with Hub." />
               </span>
             }
             action={<Badge variant="success">Active</Badge>}
@@ -489,7 +488,7 @@ export default function Dashboard() {
                 Peanut Suite v{settings.peanut_suite.version}
               </p>
               <p className="text-sm text-slate-600 mt-1">
-                Analytics and marketing data will sync with your manager site when enabled in permissions.
+                Analytics and marketing data syncs with Hub when connected.
               </p>
               {settings.peanut_suite.modules.length > 0 && (
                 <div className="mt-3">
@@ -516,13 +515,13 @@ export default function Dashboard() {
             <h3 className="font-medium text-slate-900 mb-2">Peanut Suite Not Installed</h3>
             <p className="text-sm text-slate-600 max-w-md mx-auto">
               Install Peanut Suite to unlock marketing features including UTM tracking,
-              link management, contact forms, and analytics that sync with your manager.
+              link management, contact forms, and analytics that sync with Hub.
             </p>
           </div>
         </Card>
       )}
 
-      {/* Quick Feature Overview - Only show for new/disconnected users */}
+      {/* Quick Feature Overview - Only show for disconnected users */}
       {!isConnected && (
         <div className="mt-8">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">What Peanut Connect Can Do</h2>
@@ -530,7 +529,7 @@ export default function Dashboard() {
             <FeatureCard
               icon={<Eye className="w-5 h-5" />}
               title="Remote Monitoring"
-              description="Monitor your site's health, performance, and security status from anywhere."
+              description="Monitor your site's health, performance, and security status from Hub."
               useCases={[
                 'Check if WordPress needs updates',
                 'Monitor SSL certificate expiry',
@@ -540,7 +539,7 @@ export default function Dashboard() {
             <FeatureCard
               icon={<Zap className="w-5 h-5" />}
               title="One-Click Updates"
-              description="Update plugins, themes, and WordPress core with a single click from your manager."
+              description="Update plugins, themes, and WordPress core with a single click from Hub."
               useCases={[
                 'Batch update multiple plugins',
                 'Schedule maintenance windows',

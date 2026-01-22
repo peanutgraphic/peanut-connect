@@ -1,4 +1,38 @@
-@import "tailwindcss";
+@import "tailwindcss" layer(utilities);
+
+/* Protect WordPress admin from Tailwind's global styles */
+#adminmenu,
+#adminmenu *,
+#adminmenuwrap,
+#adminmenuwrap *,
+#wpadminbar,
+#wpadminbar *,
+.wp-admin #wpwrap,
+.folded #adminmenu {
+  --tw-border-style: none !important;
+  --tw-translate-x: unset !important;
+  --tw-translate-y: unset !important;
+  border-style: revert !important;
+  box-sizing: revert !important;
+}
+
+/* Scope Tailwind preflight to our app only */
+@layer base {
+  #peanut-connect-app *,
+  #peanut-connect-app *::before,
+  #peanut-connect-app *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: currentColor;
+  }
+
+  #peanut-connect-app {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+  }
+}
 
 /* Custom theme variables */
 @theme {

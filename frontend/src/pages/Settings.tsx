@@ -6,52 +6,50 @@ import {
   CardHeader,
   Button,
   Badge,
-  Switch,
   ConfirmModal,
   useToast,
   HelpTooltip,
   InfoPanel,
-  Alert,
-  SecurityAlert,
-  DangerZone,
-  DangerAction,
   SettingsSkeleton,
 } from '@/components/common';
-import { settingsApi } from '@/api';
+import { settingsApi, errorLogApi, securityApi, permissionsApi, trackingApi } from '@/api';
+import { Link } from 'react-router-dom';
 import {
-  Key,
-  Shield,
-  Copy,
   RefreshCw,
   Unlink,
   CheckCircle2,
   AlertTriangle,
-  Eye,
-  Download,
-  BarChart3,
-  Lock,
-  ShieldCheck,
-  Info,
-  Sparkles,
   Cloud,
   Link2,
   Send,
   EyeOff,
   Power,
+  Eye,
+  Sparkles,
+  Bug,
+  ToggleLeft,
+  ToggleRight,
+  ExternalLink,
+  AlertOctagon,
+  AlertCircle,
+  Shield,
+  KeyRound,
+  MessageSquareOff,
+  Hash,
+  LogIn,
+  Users,
+  Download,
+  BarChart3,
+  User,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import type { Permissions } from '@/types';
 
 export default function Settings() {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
-  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Hub settings state
   const [hubUrl, setHubUrl] = useState('https://hub.peanutgraphic.com');
-  const [hubApiKey, setHubApiKey] = useState('');
   const [showHubDisconnectModal, setShowHubDisconnectModal] = useState(false);
 
   const { data: settings, isLoading, error, refetch } = useQuery({
@@ -59,64 +57,16 @@ export default function Settings() {
     queryFn: settingsApi.get,
   });
 
-  const generateKeyMutation = useMutation({
-    mutationFn: settingsApi.generateKey,
-    onSuccess: () => {
-      toast.success('Site key generated successfully');
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-    },
-    onError: (err) => {
-      toast.error((err as Error).message || 'Failed to generate site key');
-    },
-  });
-
-  const regenerateKeyMutation = useMutation({
-    mutationFn: settingsApi.regenerateKey,
-    onSuccess: () => {
-      toast.success('Site key regenerated. Make sure to update your manager site.');
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-      setShowRegenerateModal(false);
-    },
-    onError: (err) => {
-      toast.error((err as Error).message || 'Failed to regenerate site key');
-    },
-  });
-
-  const disconnectMutation = useMutation({
-    mutationFn: settingsApi.disconnect,
-    onSuccess: () => {
-      toast.success('Disconnected from manager site');
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      setShowDisconnectModal(false);
-    },
-    onError: (err) => {
-      toast.error((err as Error).message || 'Failed to disconnect');
-    },
-  });
-
-  const updatePermissionsMutation = useMutation({
-    mutationFn: (permissions: Partial<Permissions>) =>
-      settingsApi.updatePermissions(permissions),
-    onSuccess: () => {
-      toast.success('Permissions updated');
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-    },
-    onError: (err) => {
-      toast.error((err as Error).message || 'Failed to update permissions');
-    },
-  });
-
   // Hub mutations
-  const saveHubSettingsMutation = useMutation({
-    mutationFn: () => settingsApi.saveHubSettings(hubUrl, hubApiKey),
+  const autoConnectHubMutation = useMutation({
+    mutationFn: () => settingsApi.autoConnectToHub(hubUrl),
     onSuccess: (data) => {
-      toast.success(data.message || 'Hub connected successfully');
-      setHubApiKey('');
+      toast.success(data.message || 'Successfully connected to Hub!');
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
-    onError: (err) => {
-      toast.error((err as Error).message || 'Failed to connect to Hub');
+    onError: (err: Error & { code?: string }) => {
+      const errorMessage = err.message || 'Failed to connect to Hub';
+      toast.error(errorMessage);
     },
   });
 
@@ -165,24 +115,94 @@ export default function Settings() {
     },
   });
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success('Copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Failed to copy to clipboard');
-    }
-  };
+  const updateTrackingMutation = useMutation({
+    mutationFn: (enabled: boolean) => settingsApi.updateTracking(enabled),
+    onSuccess: (_, enabled) => {
+      toast.success(`Visitor tracking ${enabled ? 'enabled' : 'disabled'}`);
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to update tracking setting');
+    },
+  });
 
-  const handlePermissionChange = (key: keyof Permissions, value: boolean) => {
-    updatePermissionsMutation.mutate({ [key]: value });
-  };
+  // Error log queries
+  const { data: errorCounts } = useQuery({
+    queryKey: ['errorCounts'],
+    queryFn: () => errorLogApi.getCounts(),
+  });
+
+  const { data: errorLogData } = useQuery({
+    queryKey: ['errorLogStatus'],
+    queryFn: () => errorLogApi.get(1, 0),
+  });
+
+  const toggleErrorLoggingMutation = useMutation({
+    mutationFn: (enabled: boolean) => errorLogApi.updateSettings(enabled),
+    onSuccess: (_, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['errorLogStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['errorCounts'] });
+      toast.success(`Error logging ${enabled ? 'enabled' : 'disabled'}`);
+    },
+    onError: () => {
+      toast.error('Failed to update error logging setting');
+    },
+  });
+
+  // Security settings queries
+  const { data: securitySettings } = useQuery({
+    queryKey: ['securitySettings'],
+    queryFn: securityApi.get,
+  });
+
+  const updateSecurityMutation = useMutation({
+    mutationFn: (settings: Parameters<typeof securityApi.update>[0]) =>
+      securityApi.update(settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['securitySettings'] });
+      toast.success('Security setting updated');
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to update security setting');
+    },
+  });
+
+  // Hub permissions queries
+  const { data: permissions } = useQuery({
+    queryKey: ['hubPermissions'],
+    queryFn: permissionsApi.get,
+  });
+
+  const updatePermissionsMutation = useMutation({
+    mutationFn: (perms: Parameters<typeof permissionsApi.update>[0]) =>
+      permissionsApi.update(perms),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hubPermissions'] });
+      toast.success('Hub permission updated');
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to update hub permission');
+    },
+  });
+
+  // Track logged-in users mutation
+  const updateTrackLoggedInMutation = useMutation({
+    mutationFn: (enabled: boolean) => trackingApi.updateTrackLoggedIn(enabled),
+    onSuccess: (_, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      toast.success(`Track logged-in users ${enabled ? 'enabled' : 'disabled'}`);
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to update tracking setting');
+    },
+  });
+
+  // Login slug state
+  const [loginSlug, setLoginSlug] = useState('');
 
   if (isLoading) {
     return (
-      <Layout title="Settings" description="Connection and permission settings">
+      <Layout title="Settings" description="Hub connection settings">
         <SettingsSkeleton />
       </Layout>
     );
@@ -190,7 +210,7 @@ export default function Settings() {
 
   if (error) {
     return (
-      <Layout title="Settings" description="Connection and permission settings">
+      <Layout title="Settings" description="Hub connection settings">
         <Card>
           <div className="text-center py-8">
             <p className="text-slate-500 mb-4">{(error as Error).message}</p>
@@ -205,333 +225,7 @@ export default function Settings() {
   }
 
   return (
-    <Layout title="Settings" description="Connection and permission settings">
-      {/* Security Overview */}
-      <InfoPanel
-        variant="info"
-        title="About Peanut Connect Security"
-        collapsible
-        defaultOpen={false}
-        className="mb-6"
-      >
-        <p>Peanut Connect uses secure authentication to protect your site:</p>
-        <ul className="mt-2 text-sm space-y-1">
-          <li className="flex items-start gap-2">
-            <Lock className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <span><strong>Site Key:</strong> A unique, cryptographically secure token that authenticates API requests</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <Shield className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <span><strong>Permission Controls:</strong> Fine-grained control over what the manager can access</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <ShieldCheck className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <span><strong>HTTPS Required:</strong> All communication is encrypted in transit</span>
-          </li>
-        </ul>
-        <p className="mt-2 text-xs text-blue-600">
-          Your site key should be treated like a password. Never share it publicly.
-        </p>
-      </InfoPanel>
-
-      {/* Connection Status */}
-      <Card className="mb-6">
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              Connection Status
-              <HelpTooltip content="Shows whether this site is connected to a Peanut Manager. When connected, the manager can monitor health and perform updates based on your permission settings." />
-            </span>
-          }
-          action={
-            settings?.connection.connected ? (
-              <Badge variant="success">Connected</Badge>
-            ) : (
-              <Badge variant="warning">Not Connected</Badge>
-            )
-          }
-        />
-        {settings?.connection.connected ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-              <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-green-900">Connected to Manager</p>
-                <p className="text-sm text-green-700 truncate">
-                  {settings.connection.manager_url}
-                </p>
-              </div>
-            </div>
-            {settings.connection.last_sync && (
-              <p className="text-sm text-slate-500">
-                Last sync:{' '}
-                {formatDistanceToNow(new Date(settings.connection.last_sync), {
-                  addSuffix: true,
-                })}
-              </p>
-            )}
-            <InfoPanel variant="success" title="Connection Active" collapsible defaultOpen={false}>
-              <p>Your site is being monitored. The manager can:</p>
-              <ul className="mt-2 text-sm space-y-1">
-                <li className="flex items-center gap-2">
-                  <Eye className="w-3.5 h-3.5" />
-                  View site health and status
-                </li>
-                <li className="flex items-center gap-2">
-                  <Download className="w-3.5 h-3.5" />
-                  See available updates
-                </li>
-                {settings.permissions.perform_updates && (
-                  <li className="flex items-center gap-2">
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Install updates remotely
-                  </li>
-                )}
-                {settings.permissions.access_analytics && settings.peanut_suite && (
-                  <li className="flex items-center gap-2">
-                    <BarChart3 className="w-3.5 h-3.5" />
-                    Access Peanut Suite analytics
-                  </li>
-                )}
-              </ul>
-            </InfoPanel>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
-              <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0" />
-              <div>
-                <p className="font-medium text-amber-900">Not Connected</p>
-                <p className="text-sm text-amber-700">
-                  Generate a site key below and add it to your manager site.
-                </p>
-              </div>
-            </div>
-            <InfoPanel variant="guide" title="How to Connect" collapsible defaultOpen={true}>
-              <ol className="mt-2 text-sm space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
-                  <span>Generate a site key by clicking the button below</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
-                  <span>Copy the site key and your site URL ({window.location.origin})</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
-                  <span>Go to your Peanut Manager dashboard and add a new site</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">4</span>
-                  <span>Paste the site URL and site key to complete connection</span>
-                </li>
-              </ol>
-            </InfoPanel>
-          </div>
-        )}
-      </Card>
-
-      {/* Site Key */}
-      <Card className="mb-6">
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              Site Key
-              <HelpTooltip content="The site key is a secret token that authenticates your manager's API requests. Keep it secure - anyone with this key can access your site's health data and potentially perform updates." />
-            </span>
-          }
-          description="Use this key to connect this site to your Peanut Monitor dashboard"
-          action={<Key className="w-5 h-5 text-slate-400" />}
-        />
-
-        {!settings?.connection.site_key ? (
-          <div className="space-y-4">
-            <p className="text-slate-600">
-              Generate a site key to enable remote monitoring from your Peanut Manager.
-            </p>
-            <Alert variant="info">
-              <strong>What happens when you generate a key:</strong>
-              <ul className="mt-1 text-sm space-y-0.5">
-                <li>• A unique, secure token is created for this site</li>
-                <li>• You can add this key to your manager to establish connection</li>
-                <li>• The key can be regenerated at any time if compromised</li>
-              </ul>
-            </Alert>
-            <Button
-              onClick={() => generateKeyMutation.mutate()}
-              loading={generateKeyMutation.isPending}
-              icon={<Key className="w-4 h-4" />}
-            >
-              Generate Site Key
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <SecurityAlert severity="low" title="Keep Your Site Key Secure">
-              This key grants access to your site's API. Treat it like a password:
-              <ul className="mt-1 text-sm space-y-0.5">
-                <li>• Never share it in public channels or forums</li>
-                <li>• Only give it to your Peanut Manager instance</li>
-                <li>• Regenerate it if you suspect it's been compromised</li>
-              </ul>
-            </SecurityAlert>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Your Site Key</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-3 bg-slate-100 rounded-lg font-mono text-sm break-all border border-slate-200">
-                  {settings.connection.site_key}
-                </code>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(settings.connection.site_key!)}
-                  icon={copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                >
-                  {copied ? 'Copied' : 'Copy'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Your Site URL</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-sm text-slate-600 font-mono">
-                  {window.location.origin}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToClipboard(window.location.origin)}
-                  icon={<Copy className="w-4 h-4" />}
-                >
-                  Copy
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Permissions */}
-      <Card className="mb-6">
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              Permissions
-              <HelpTooltip content="Fine-grained control over what your manager site can do. You can enable or disable specific capabilities at any time." />
-            </span>
-          }
-          description="Control what the manager site can do on this site"
-          action={<Shield className="w-5 h-5 text-slate-400" />}
-        />
-
-        <InfoPanel variant="info" title="Understanding Permissions" collapsible defaultOpen={false} className="mb-4">
-          <p>Permissions control what the connected manager can access and do:</p>
-          <ul className="mt-2 text-sm space-y-1">
-            <li><strong>Health Checks:</strong> View system info, PHP version, SSL status, etc.</li>
-            <li><strong>List Updates:</strong> See which plugins/themes need updating</li>
-            <li><strong>Perform Updates:</strong> Actually install updates remotely</li>
-            <li><strong>Access Analytics:</strong> View Peanut Suite marketing data</li>
-          </ul>
-          <p className="mt-2 text-xs">Changes take effect immediately - no reconnection needed.</p>
-        </InfoPanel>
-
-        <div className="space-y-6">
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-slate-600" />
-                  <span className="font-medium text-slate-900">Health Checks</span>
-                  <Badge variant="primary" size="sm">Always On</Badge>
-                </div>
-                <p className="text-sm text-slate-600 mt-1">
-                  Allows manager to view site health status, PHP version, SSL info, and server configuration.
-                </p>
-              </div>
-              <Switch
-                checked={true}
-                onChange={() => {}}
-                disabled
-              />
-            </div>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Download className="w-4 h-4 text-slate-600" />
-                  <span className="font-medium text-slate-900">List Updates</span>
-                  <Badge variant="primary" size="sm">Always On</Badge>
-                </div>
-                <p className="text-sm text-slate-600 mt-1">
-                  Allows manager to see available plugin, theme, and core updates.
-                </p>
-              </div>
-              <Switch
-                checked={true}
-                onChange={() => {}}
-                disabled
-              />
-            </div>
-          </div>
-
-          <div className={`p-4 rounded-lg border ${settings?.permissions.perform_updates ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <RefreshCw className={`w-4 h-4 ${settings?.permissions.perform_updates ? 'text-amber-600' : 'text-slate-600'}`} />
-                  <span className="font-medium text-slate-900">Perform Updates</span>
-                  {settings?.permissions.perform_updates && (
-                    <Badge variant="warning" size="sm">Caution</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mt-1">
-                  Allow manager to install plugin, theme, and core updates remotely.
-                </p>
-                {settings?.permissions.perform_updates && (
-                  <p className="text-xs text-amber-700 mt-2">
-                    <AlertTriangle className="w-3 h-3 inline mr-1" />
-                    The manager can update your site without confirmation. Only enable if you trust the manager.
-                  </p>
-                )}
-              </div>
-              <Switch
-                checked={settings?.permissions.perform_updates ?? true}
-                onChange={(checked) => handlePermissionChange('perform_updates', checked)}
-              />
-            </div>
-          </div>
-
-          <div className={`p-4 rounded-lg border ${settings?.permissions.access_analytics ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <BarChart3 className={`w-4 h-4 ${settings?.permissions.access_analytics ? 'text-blue-600' : 'text-slate-600'}`} />
-                  <span className="font-medium text-slate-900">Access Analytics</span>
-                </div>
-                <p className="text-sm text-slate-600 mt-1">
-                  Share Peanut Suite analytics data (UTM clicks, contacts, form submissions) with manager site.
-                </p>
-                {!settings?.peanut_suite && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    <Info className="w-3 h-3 inline mr-1" />
-                    Peanut Suite is not installed. This permission has no effect.
-                  </p>
-                )}
-              </div>
-              <Switch
-                checked={settings?.permissions.access_analytics ?? true}
-                onChange={(checked) => handlePermissionChange('access_analytics', checked)}
-                disabled={!settings?.peanut_suite}
-              />
-            </div>
-          </div>
-        </div>
-      </Card>
-
+    <Layout title="Settings" description="Hub connection settings">
       {/* Hub Connection */}
       <Card className="mb-6">
         <CardHeader
@@ -541,7 +235,13 @@ export default function Settings() {
               <HelpTooltip content="Connect to Peanut Hub to sync health data, analytics, and receive popup deployments from your agency dashboard." />
             </span>
           }
-          action={<Cloud className="w-5 h-5 text-slate-400" />}
+          action={
+            settings?.hub?.connected ? (
+              <Badge variant="success">Connected</Badge>
+            ) : (
+              <Badge variant="warning">Not Connected</Badge>
+            )
+          }
         />
         {settings?.hub?.connected ? (
           <div className="space-y-4">
@@ -562,7 +262,7 @@ export default function Settings() {
                 })}
               </p>
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -580,14 +280,6 @@ export default function Settings() {
                 icon={<RefreshCw className="w-4 h-4" />}
               >
                 Test Connection
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowHubDisconnectModal(true)}
-                icon={<Unlink className="w-4 h-4" />}
-              >
-                Disconnect
               </Button>
             </div>
 
@@ -691,6 +383,104 @@ export default function Settings() {
                 <p className="text-sm text-slate-500 mt-2">Updating mode...</p>
               )}
             </div>
+
+            {/* Visitor Tracking */}
+            <div className="mt-6 pt-6 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Eye className="w-4 h-4 text-slate-600" />
+                    <span className="font-medium text-slate-900">Visitor Tracking</span>
+                    <HelpTooltip content="Track pageviews, visitor sessions, and traffic sources. Data is synced to Hub for analytics." />
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    Collect anonymous visitor data for Top Pages and Traffic Sources analytics in Hub.
+                  </p>
+                </div>
+                <button
+                  onClick={() => updateTrackingMutation.mutate(!settings?.hub?.tracking_enabled)}
+                  disabled={updateTrackingMutation.isPending}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    settings?.hub?.tracking_enabled
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {settings?.hub?.tracking_enabled ? (
+                    <>
+                      <ToggleRight className="w-5 h-5" />
+                      Enabled
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-5 h-5" />
+                      Disabled
+                    </>
+                  )}
+                </button>
+              </div>
+              {settings?.hub?.tracking_enabled && (
+                <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-700">
+                    <CheckCircle2 className="w-4 h-4 inline mr-1" />
+                    Tracking active. Pageviews and visitor data will sync to Hub.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Peanut Suite Detection */}
+            {settings?.peanut_suite && (
+              <div className="mt-6 pt-6 border-t border-slate-200">
+                <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <Sparkles className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-900">
+                      Peanut Suite v{settings.peanut_suite.version}
+                    </p>
+                    <p className="text-sm text-green-700">
+                      Analytics data is synced with Hub
+                    </p>
+                  </div>
+                </div>
+                {settings.peanut_suite.modules.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-slate-700 mb-2">Active Modules</p>
+                    <div className="flex flex-wrap gap-2">
+                      {settings.peanut_suite.modules.map((module) => (
+                        <Badge key={module} variant="primary" size="sm">
+                          {module}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Danger Zone - Disconnect */}
+            <div className="mt-6 pt-6 border-t border-red-200">
+              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="flex items-start gap-3">
+                  <Unlink className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-red-900">Disconnect from Hub</p>
+                    <p className="text-sm text-red-700 mt-1">
+                      Stop syncing health data with Hub. You'll need to reconnect to resume monitoring.
+                    </p>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setShowHubDisconnectModal(true)}
+                      icon={<Unlink className="w-4 h-4" />}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -699,7 +489,7 @@ export default function Settings() {
               <div>
                 <p className="font-medium text-slate-700">Not Connected to Hub</p>
                 <p className="text-sm text-slate-500">
-                  Enter your Hub URL and API key to connect this site.
+                  Connect this site to your Hub to enable health monitoring and sync.
                 </p>
               </div>
             </div>
@@ -707,15 +497,15 @@ export default function Settings() {
               <ol className="mt-2 text-sm space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
-                  <span>Go to your Hub dashboard and find this site</span>
+                  <span>Make sure this site exists in your Hub dashboard (your agency needs to add it first)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
-                  <span>Copy the API key from the site settings</span>
+                  <span>Enter your Hub URL below and click "Connect to Hub"</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-5 h-5 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
-                  <span>Paste it below and click Connect</span>
+                  <span>The connection will be established automatically - no API key needed!</span>
                 </li>
               </ol>
             </InfoPanel>
@@ -730,20 +520,10 @@ export default function Settings() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">API Key</label>
-                <input
-                  type="password"
-                  value={hubApiKey}
-                  onChange={(e) => setHubApiKey(e.target.value)}
-                  placeholder="Enter your site's API key from Hub"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
               <Button
-                onClick={() => saveHubSettingsMutation.mutate()}
-                loading={saveHubSettingsMutation.isPending}
-                disabled={!hubUrl || !hubApiKey}
+                onClick={() => autoConnectHubMutation.mutate()}
+                loading={autoConnectHubMutation.isPending}
+                disabled={!hubUrl}
                 icon={<Link2 className="w-4 h-4" />}
               >
                 Connect to Hub
@@ -753,120 +533,454 @@ export default function Settings() {
         )}
       </Card>
 
-      {/* Peanut Suite Integration */}
+      {/* Debug & Logging */}
       <Card className="mb-6">
         <CardHeader
           title={
             <span className="flex items-center gap-2">
-              Peanut Suite Integration
-              <HelpTooltip content="Peanut Suite is a marketing toolkit for WordPress. When installed, you can sync analytics data with your manager for centralized reporting." />
+              <Bug className="w-5 h-5" />
+              Debug & Logging
+              <HelpTooltip content="Monitor PHP errors and debug issues on your site. Logs are stored securely and automatically rotated." />
             </span>
           }
-          action={<Sparkles className="w-5 h-5 text-slate-400" />}
+          action={
+            <button
+              onClick={() => toggleErrorLoggingMutation.mutate(!errorLogData?.logging_enabled)}
+              disabled={toggleErrorLoggingMutation.isPending}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                errorLogData?.logging_enabled
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {errorLogData?.logging_enabled ? (
+                <ToggleRight className="w-4 h-4" />
+              ) : (
+                <ToggleLeft className="w-4 h-4" />
+              )}
+              {errorLogData?.logging_enabled ? 'Logging On' : 'Logging Off'}
+            </button>
+          }
         />
-        {settings?.peanut_suite ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-              <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0" />
-              <div>
-                <p className="font-medium text-green-900">
-                  Peanut Suite v{settings.peanut_suite.version} Detected
-                </p>
-                <p className="text-sm text-green-700">
-                  Analytics data will be synced with your manager site when enabled.
-                </p>
+        <div className="space-y-4">
+          {/* Error Counts Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 text-sm text-red-600">
+                <AlertOctagon className="w-4 h-4" />
+                Critical
               </div>
+              <div className="text-xl font-bold text-red-700 mt-1">
+                {errorCounts?.last_24h?.critical ?? 0}
+              </div>
+              <div className="text-xs text-red-500">last 24h</div>
             </div>
-            {settings.peanut_suite.modules.length > 0 && (
-              <div>
-                <p className="text-sm font-medium text-slate-700 mb-2">Active Modules</p>
-                <div className="flex flex-wrap gap-2">
-                  {settings.peanut_suite.modules.map((module) => (
-                    <Badge key={module} variant="primary" size="sm">
-                      {module}
-                    </Badge>
-                  ))}
-                </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 text-sm text-orange-600">
+                <AlertCircle className="w-4 h-4" />
+                Errors
               </div>
-            )}
-            <InfoPanel variant="tip" title="Analytics Syncing" collapsible defaultOpen={false}>
-              <p>When analytics access is enabled, the manager can view:</p>
-              <ul className="mt-2 text-sm space-y-1">
-                <li>• UTM tracking data and campaign performance</li>
-                <li>• Link click statistics</li>
-                <li>• Contact form submissions</li>
-                <li>• Popup impressions and conversions</li>
-              </ul>
-            </InfoPanel>
+              <div className="text-xl font-bold text-orange-700 mt-1">
+                {errorCounts?.last_24h?.error ?? 0}
+              </div>
+              <div className="text-xs text-orange-500">last 24h</div>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 text-sm text-yellow-600">
+                <AlertTriangle className="w-4 h-4" />
+                Warnings
+              </div>
+              <div className="text-xl font-bold text-yellow-700 mt-1">
+                {errorCounts?.last_24h?.warning ?? 0}
+              </div>
+              <div className="text-xs text-yellow-500">last 24h</div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 text-sm text-slate-600">
+                Total
+              </div>
+              <div className="text-xl font-bold text-slate-700 mt-1">
+                {errorCounts?.all_time?.total ?? 0}
+              </div>
+              <div className="text-xs text-slate-500">all time</div>
+            </div>
           </div>
-        ) : (
-          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="w-12 h-12 bg-slate-200 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-slate-400" />
-            </div>
+
+          {/* Quick Info */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
             <div>
-              <p className="font-medium text-slate-700">Peanut Suite Not Installed</p>
-              <p className="text-sm text-slate-500">
-                Install Peanut Suite to enable marketing features and analytics syncing with your manager.
+              <p className="text-sm font-medium text-slate-700">Error Log</p>
+              <p className="text-xs text-slate-500">
+                View detailed PHP errors, warnings, and notices
               </p>
             </div>
+            <Link
+              to="/errors"
+              className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              View Full Log
+              <ExternalLink className="w-4 h-4" />
+            </Link>
           </div>
-        )}
+
+          {/* Log Storage Info */}
+          <p className="text-xs text-slate-500">
+            Logs are stored in <code className="bg-slate-100 px-1 py-0.5 rounded">wp-content/peanut-logs/</code> and protected from web access. Max 500 entries kept.
+          </p>
+        </div>
       </Card>
 
-      {/* Danger Zone */}
-      {settings?.connection.site_key && (
-        <DangerZone
-          title="Danger Zone"
-          description="These actions can disrupt your connection and require reconfiguration. Proceed with caution."
-        >
-          <DangerAction
-            icon={<RefreshCw className="w-5 h-5" />}
-            title="Regenerate Site Key"
-            description="Create a new site key and invalidate the current one. You'll need to update your manager."
-            buttonLabel="Regenerate"
-            warningMessage="This will immediately invalidate your current site key. The manager will lose access until you update it with the new key. Make sure you have access to your manager dashboard before proceeding."
-            onAction={async () => { await regenerateKeyMutation.mutateAsync(); }}
-            loading={regenerateKeyMutation.isPending}
-          />
+      {/* Security Settings */}
+      <Card className="mb-6">
+        <CardHeader
+          title={
+            <span className="flex items-center gap-2">
+              <Shield className="w-5 h-5" />
+              Security Hardening
+              <HelpTooltip content="Enable security features to protect your WordPress site from common attacks and exploits." />
+            </span>
+          }
+        />
+        <div className="space-y-4">
+          {/* Disable XML-RPC */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <KeyRound className="w-4 h-4 text-slate-600" />
+                <span className="font-medium text-slate-900">Disable XML-RPC</span>
+              </div>
+              <p className="text-sm text-slate-600">
+                Disable the XML-RPC protocol to prevent brute force and DDoS attacks.
+              </p>
+            </div>
+            <button
+              onClick={() => updateSecurityMutation.mutate({ disable_xmlrpc: !securitySettings?.disable_xmlrpc })}
+              disabled={updateSecurityMutation.isPending}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                securitySettings?.disable_xmlrpc
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {securitySettings?.disable_xmlrpc ? (
+                <>
+                  <ToggleRight className="w-5 h-5" />
+                  On
+                </>
+              ) : (
+                <>
+                  <ToggleLeft className="w-5 h-5" />
+                  Off
+                </>
+              )}
+            </button>
+          </div>
 
-          {settings.connection.connected && (
-            <DangerAction
-              icon={<Unlink className="w-5 h-5" />}
-              title="Disconnect from Manager"
-              description="Remove the connection to your manager site. Your site key will remain valid for reconnection."
-              buttonLabel="Disconnect"
-              warningMessage="This will disconnect your site from the manager. You won't receive remote monitoring or updates until you reconnect. Your site key will remain valid, so you can reconnect by adding this site to your manager again."
-              onAction={async () => { await disconnectMutation.mutateAsync(); }}
-              loading={disconnectMutation.isPending}
-            />
+          {/* Remove WordPress Version */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Hash className="w-4 h-4 text-slate-600" />
+                <span className="font-medium text-slate-900">Hide WordPress Version</span>
+              </div>
+              <p className="text-sm text-slate-600">
+                Remove WordPress version from page source and asset URLs.
+              </p>
+            </div>
+            <button
+              onClick={() => updateSecurityMutation.mutate({ remove_version: !securitySettings?.remove_version })}
+              disabled={updateSecurityMutation.isPending}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                securitySettings?.remove_version
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {securitySettings?.remove_version ? (
+                <>
+                  <ToggleRight className="w-5 h-5" />
+                  On
+                </>
+              ) : (
+                <>
+                  <ToggleLeft className="w-5 h-5" />
+                  Off
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Disable Comments */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <MessageSquareOff className="w-4 h-4 text-slate-600" />
+                <span className="font-medium text-slate-900">Disable Comments</span>
+              </div>
+              <p className="text-sm text-slate-600">
+                Completely disable the comments system across the entire site.
+              </p>
+            </div>
+            <button
+              onClick={() => updateSecurityMutation.mutate({ disable_comments: !securitySettings?.disable_comments?.enabled })}
+              disabled={updateSecurityMutation.isPending}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                securitySettings?.disable_comments?.enabled
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {securitySettings?.disable_comments?.enabled ? (
+                <>
+                  <ToggleRight className="w-5 h-5" />
+                  On
+                </>
+              ) : (
+                <>
+                  <ToggleLeft className="w-5 h-5" />
+                  Off
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Hide Existing Comments - Only show if comments are disabled */}
+          {securitySettings?.disable_comments?.enabled && (
+            <div className="flex items-center justify-between p-4 ml-6 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex-1">
+                <span className="font-medium text-slate-900">Hide Existing Comments</span>
+                <p className="text-sm text-slate-600">
+                  Also hide any existing comments on the site.
+                </p>
+              </div>
+              <button
+                onClick={() => updateSecurityMutation.mutate({ hide_existing_comments: !securitySettings?.disable_comments?.hide_existing })}
+                disabled={updateSecurityMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  securitySettings?.disable_comments?.hide_existing
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {securitySettings?.disable_comments?.hide_existing ? (
+                  <>
+                    <ToggleRight className="w-5 h-5" />
+                    On
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-5 h-5" />
+                    Off
+                  </>
+                )}
+              </button>
+            </div>
           )}
-        </DangerZone>
+
+          {/* Hide Login */}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <LogIn className="w-4 h-4 text-slate-600" />
+                  <span className="font-medium text-slate-900">Custom Login URL</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Hide wp-login.php and use a custom URL for admin login.
+                </p>
+              </div>
+              <button
+                onClick={() => updateSecurityMutation.mutate({ hide_login_enabled: !securitySettings?.hide_login?.enabled })}
+                disabled={updateSecurityMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  securitySettings?.hide_login?.enabled
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {securitySettings?.hide_login?.enabled ? (
+                  <>
+                    <ToggleRight className="w-5 h-5" />
+                    On
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-5 h-5" />
+                    Off
+                  </>
+                )}
+              </button>
+            </div>
+            {securitySettings?.hide_login?.enabled && (
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-sm text-slate-600">{window.location.origin}/</span>
+                <input
+                  type="text"
+                  value={loginSlug || securitySettings?.hide_login?.custom_slug || ''}
+                  onChange={(e) => setLoginSlug(e.target.value)}
+                  placeholder="my-login"
+                  className="flex-1 max-w-[200px] px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (loginSlug && loginSlug !== securitySettings?.hide_login?.custom_slug) {
+                      updateSecurityMutation.mutate({ hide_login_slug: loginSlug });
+                    }
+                  }}
+                  disabled={!loginSlug || loginSlug === securitySettings?.hide_login?.custom_slug || updateSecurityMutation.isPending}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+            {securitySettings?.hide_login?.enabled && securitySettings?.hide_login?.custom_slug && (
+              <p className="mt-2 text-sm text-amber-600">
+                <AlertTriangle className="w-4 h-4 inline mr-1" />
+                Remember your login URL! Bookmark: {window.location.origin}/{securitySettings.hide_login.custom_slug}
+              </p>
+            )}
+          </div>
+
+          {/* File Editing Status (read-only) */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex-1">
+              <span className="font-medium text-slate-900">File Editing</span>
+              <p className="text-sm text-slate-600">
+                Theme and plugin editor in WordPress admin.
+              </p>
+            </div>
+            <Badge variant={securitySettings?.disable_file_editing ? 'success' : 'warning'}>
+              {securitySettings?.disable_file_editing ? 'Disabled' : 'Enabled'}
+            </Badge>
+          </div>
+          <p className="text-xs text-slate-500 -mt-2 ml-4">
+            File editing is controlled via wp-config.php (DISALLOW_FILE_EDIT constant).
+          </p>
+        </div>
+      </Card>
+
+      {/* Hub Permissions */}
+      {settings?.hub?.connected && (
+        <Card className="mb-6">
+          <CardHeader
+            title={
+              <span className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Hub Permissions
+                <HelpTooltip content="Control what your agency's Hub can access and do on this site." />
+              </span>
+            }
+          />
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              These settings control what Hub can access on this site. Health checks and viewing updates are always allowed.
+            </p>
+
+            {/* Perform Updates */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Download className="w-4 h-4 text-slate-600" />
+                  <span className="font-medium text-slate-900">Remote Updates</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Allow Hub to remotely update plugins and themes on this site.
+                </p>
+              </div>
+              <button
+                onClick={() => updatePermissionsMutation.mutate({ perform_updates: !permissions?.perform_updates })}
+                disabled={updatePermissionsMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  permissions?.perform_updates
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {permissions?.perform_updates ? (
+                  <>
+                    <ToggleRight className="w-5 h-5" />
+                    Allowed
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-5 h-5" />
+                    Denied
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Access Analytics */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart3 className="w-4 h-4 text-slate-600" />
+                  <span className="font-medium text-slate-900">Analytics Access</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Allow Hub to access Peanut Suite analytics data.
+                </p>
+              </div>
+              <button
+                onClick={() => updatePermissionsMutation.mutate({ access_analytics: !permissions?.access_analytics })}
+                disabled={updatePermissionsMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  permissions?.access_analytics
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {permissions?.access_analytics ? (
+                  <>
+                    <ToggleRight className="w-5 h-5" />
+                    Allowed
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-5 h-5" />
+                    Denied
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Track Logged-In Users */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <User className="w-4 h-4 text-slate-600" />
+                  <span className="font-medium text-slate-900">Track Logged-In Users</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Include logged-in users in visitor tracking (by default they are excluded).
+                </p>
+              </div>
+              <button
+                onClick={() => updateTrackLoggedInMutation.mutate(!settings?.hub?.track_logged_in)}
+                disabled={updateTrackLoggedInMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  settings?.hub?.track_logged_in
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {settings?.hub?.track_logged_in ? (
+                  <>
+                    <ToggleRight className="w-5 h-5" />
+                    Tracked
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-5 h-5" />
+                    Excluded
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </Card>
       )}
-
-      {/* Disconnect Modal */}
-      <ConfirmModal
-        isOpen={showDisconnectModal}
-        onClose={() => setShowDisconnectModal(false)}
-        onConfirm={() => disconnectMutation.mutate()}
-        title="Disconnect from Manager"
-        message="Are you sure you want to disconnect from your manager site? You'll need to add the site key again to reconnect."
-        confirmText="Disconnect"
-        variant="danger"
-        loading={disconnectMutation.isPending}
-      />
-
-      {/* Regenerate Key Modal */}
-      <ConfirmModal
-        isOpen={showRegenerateModal}
-        onClose={() => setShowRegenerateModal(false)}
-        onConfirm={() => regenerateKeyMutation.mutate()}
-        title="Regenerate Site Key"
-        message="Are you sure you want to regenerate the site key? The current key will be invalidated and you'll need to update your manager site with the new key."
-        confirmText="Regenerate"
-        variant="danger"
-        loading={regenerateKeyMutation.isPending}
-      />
 
       {/* Hub Disconnect Modal */}
       <ConfirmModal
@@ -874,7 +988,7 @@ export default function Settings() {
         onClose={() => setShowHubDisconnectModal(false)}
         onConfirm={() => disconnectHubMutation.mutate()}
         title="Disconnect from Hub"
-        message="Are you sure you want to disconnect from Peanut Hub? Health data will no longer be synced and you'll need to reconfigure the connection to reconnect."
+        message="Are you sure you want to disconnect from Peanut Hub? Health data will no longer be synced and you'll need to reconnect to resume monitoring."
         confirmText="Disconnect"
         variant="danger"
         loading={disconnectHubMutation.isPending}

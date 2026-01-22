@@ -26,49 +26,16 @@ class Peanut_Connect_API {
             'permission_callback' => [$this, 'admin_permission_check'],
         ]);
 
-        // Update permissions
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/permissions', [
+        // Hub settings - auto-connect (generates key and sends to Hub)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/hub/connect', [
             'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'update_permissions'],
-            'permission_callback' => [$this, 'admin_permission_check'],
-        ]);
-
-        // Generate site key
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/generate-key', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'generate_site_key'],
-            'permission_callback' => [$this, 'admin_permission_check'],
-        ]);
-
-        // Regenerate site key
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/regenerate-key', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'regenerate_site_key'],
-            'permission_callback' => [$this, 'admin_permission_check'],
-        ]);
-
-        // Disconnect from manager (admin action)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/disconnect', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'admin_disconnect'],
-            'permission_callback' => [$this, 'admin_permission_check'],
-        ]);
-
-        // Hub settings - save
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/settings/hub', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'save_hub_settings'],
+            'callback' => [$this, 'auto_connect_to_hub'],
             'permission_callback' => [$this, 'admin_permission_check'],
             'args' => [
                 'hub_url' => [
                     'required' => true,
                     'type' => 'string',
                     'sanitize_callback' => 'esc_url_raw',
-                ],
-                'api_key' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
                 ],
             ],
         ]);
@@ -403,195 +370,21 @@ class Peanut_Connect_API {
         ]);
 
         // =====================
-        // Manager endpoints (require Bearer token)
+        // Permissions endpoints (admin)
         // =====================
-        // Verify connection
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/verify', [
+
+        // Get hub permissions
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/permissions', [
             'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'verify'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
+            'callback' => [$this, 'get_permissions'],
+            'permission_callback' => [$this, 'admin_permission_check'],
         ]);
 
-        // Health check
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/health', [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_health'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
-        ]);
-
-        // Get available updates
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/updates', [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_updates'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
-        ]);
-
-        // Perform update
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/update', [
+        // Update hub permissions
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/permissions', [
             'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'perform_update'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'type' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'enum' => ['plugin', 'theme', 'core'],
-                ],
-                'slug' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-        ]);
-
-        // Get Peanut Suite analytics
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/analytics', [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_analytics'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('access_analytics'),
-        ]);
-
-        // Disconnect notification
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/disconnect', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'handle_disconnect'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
-        ]);
-
-        // Get all plugins (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/plugins', [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_all_plugins'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
-        ]);
-
-        // Get all themes (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/themes', [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_all_themes'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
-        ]);
-
-        // Activate plugin (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/plugin/activate', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'activate_plugin'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'plugin' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-        ]);
-
-        // Deactivate plugin (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/plugin/deactivate', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'deactivate_plugin'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'plugin' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-        ]);
-
-        // Delete plugin (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/plugin/delete', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'delete_plugin'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'plugin' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-        ]);
-
-        // Activate theme (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/theme/activate', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'activate_theme'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'theme' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-        ]);
-
-        // Delete theme (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/theme/delete', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'delete_theme'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'theme' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-        ]);
-
-        // Bulk update plugins (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/plugins/bulk-update', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'bulk_update_plugins'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-        ]);
-
-        // Bulk update themes (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/themes/bulk-update', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'bulk_update_themes'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-        ]);
-
-        // Toggle auto-update (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/auto-update', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'toggle_auto_update'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
-            'args' => [
-                'type' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'enum' => ['plugin', 'theme'],
-                ],
-                'item' => [
-                    'required' => true,
-                    'type' => 'string',
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-                'enable' => [
-                    'required' => true,
-                    'type' => 'boolean',
-                ],
-            ],
-        ]);
-
-        // Get security settings (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/security', [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => [$this, 'get_security_settings'],
-            'permission_callback' => [Peanut_Connect_Auth::class, 'permission_callback'],
-        ]);
-
-        // Update security settings (for manager/hub)
-        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/manager/security', [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => [$this, 'update_security_settings'],
-            'permission_callback' => Peanut_Connect_Auth::permission_callback_for('perform_updates'),
+            'callback' => [$this, 'update_permissions'],
+            'permission_callback' => [$this, 'admin_permission_check'],
         ]);
 
         // =====================
@@ -695,6 +488,13 @@ class Peanut_Connect_API {
                     'sanitize_callback' => 'absint',
                 ],
             ],
+        ]);
+
+        // Get health data for Hub (used to refresh health data after updates)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/health', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_hub_health'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
         ]);
 
         // =====================
@@ -810,46 +610,7 @@ class Peanut_Connect_API {
     }
 
     /**
-     * Verify connection endpoint
-     */
-    public function verify(WP_REST_Request $request): WP_REST_Response {
-        $health_data = Peanut_Connect_Health::get_health_data();
-
-        return new WP_REST_Response([
-            'success' => true,
-            'site_name' => get_bloginfo('name'),
-            'site_url' => get_site_url(),
-            'wp_version' => get_bloginfo('version'),
-            'permissions' => Peanut_Connect_Auth::get_permissions(),
-            'peanut_suite' => $health_data['peanut_suite'],
-            'health' => [
-                'wp_version' => $health_data['wp_version'],
-                'php_version' => $health_data['php_version'],
-                'ssl' => $health_data['ssl'],
-            ],
-        ], 200);
-    }
-
-    /**
-     * Get health data endpoint
-     */
-    public function get_health(WP_REST_Request $request): WP_REST_Response {
-        $health = Peanut_Connect_Health::get_health_data();
-
-        return new WP_REST_Response($health, 200);
-    }
-
-    /**
-     * Get available updates endpoint
-     */
-    public function get_updates(WP_REST_Request $request): WP_REST_Response {
-        $updates = Peanut_Connect_Updates::get_available_updates();
-
-        return new WP_REST_Response($updates, 200);
-    }
-
-    /**
-     * Perform update endpoint
+     * Perform update endpoint (used by Hub)
      */
     public function perform_update(WP_REST_Request $request): WP_REST_Response {
         $type = $request->get_param('type');
@@ -868,105 +629,6 @@ class Peanut_Connect_API {
         return new WP_REST_Response($result, 200);
     }
 
-    /**
-     * Get Peanut Suite analytics endpoint
-     */
-    public function get_analytics(WP_REST_Request $request): WP_REST_Response {
-        // Check if Peanut Suite is installed
-        if (!function_exists('peanut_is_module_active')) {
-            return new WP_REST_Response([
-                'success' => false,
-                'code' => 'peanut_suite_not_installed',
-                'message' => __('Peanut Suite is not installed on this site.', 'peanut-connect'),
-            ], 404);
-        }
-
-        global $wpdb;
-
-        $analytics = [
-            'contacts' => 0,
-            'utm_clicks' => 0,
-            'link_clicks' => 0,
-            'forms_submitted' => 0,
-            'recent_leads' => [],
-        ];
-
-        // Date for 30-day lookback queries
-        $thirty_days_ago = gmdate('Y-m-d H:i:s', strtotime('-30 days'));
-
-        // Get contacts count if module active
-        if (peanut_is_module_active('contacts')) {
-            $contacts_table = $wpdb->prefix . 'peanut_contacts';
-
-            $analytics['contacts'] = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$contacts_table} WHERE created_at >= %s",
-                $thirty_days_ago
-            ));
-
-            // Get recent leads
-            $analytics['recent_leads'] = $wpdb->get_results($wpdb->prepare(
-                "SELECT id, email, first_name, last_name, status, created_at
-                 FROM {$contacts_table}
-                 ORDER BY created_at DESC
-                 LIMIT %d",
-                5
-            ), ARRAY_A);
-        }
-
-        // Get UTM clicks if module active
-        if (peanut_is_module_active('utm')) {
-            $utms_table = $wpdb->prefix . 'peanut_utms';
-            $analytics['utm_clicks'] = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT SUM(click_count) FROM {$utms_table} WHERE created_at >= %s",
-                $thirty_days_ago
-            ));
-        }
-
-        // Get link clicks if module active
-        if (peanut_is_module_active('links')) {
-            $clicks_table = $wpdb->prefix . 'peanut_link_clicks';
-            $analytics['link_clicks'] = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$clicks_table} WHERE clicked_at >= %s",
-                $thirty_days_ago
-            ));
-        }
-
-        // Check for FormFlow integration
-        if (class_exists('FormFlow')) {
-            $submissions_table = $wpdb->prefix . 'ff_submissions';
-            $table_exists = $wpdb->get_var($wpdb->prepare(
-                "SHOW TABLES LIKE %s",
-                $submissions_table
-            ));
-            if ($table_exists) {
-                $analytics['forms_submitted'] = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$submissions_table} WHERE created_at >= %s",
-                    $thirty_days_ago
-                ));
-            }
-        }
-
-        return new WP_REST_Response([
-            'success' => true,
-            'period' => '30d',
-            'data' => $analytics,
-        ], 200);
-    }
-
-    /**
-     * Handle disconnect notification from manager
-     */
-    public function handle_disconnect(WP_REST_Request $request): WP_REST_Response {
-        // Clear manager URL but keep the site key (in case they want to reconnect)
-        delete_option('peanut_connect_manager_url');
-        delete_option('peanut_connect_last_sync');
-
-        return new WP_REST_Response([
-            'success' => true,
-            'message' => __('Disconnected from manager site.', 'peanut-connect'),
-        ], 200);
-    }
-
     // =====================
     // Admin endpoint callbacks
     // =====================
@@ -979,18 +641,16 @@ class Peanut_Connect_API {
     }
 
     /**
-     * Get settings for admin panel
+     * Get settings for admin panel (Hub-only)
      */
     public function get_settings(WP_REST_Request $request): WP_REST_Response {
-        $site_key = get_option('peanut_connect_site_key');
-        $manager_url = get_option('peanut_connect_manager_url');
-        $last_sync = get_option('peanut_connect_last_sync');
-        $permissions = get_option('peanut_connect_permissions', [
-            'health_check' => true,
-            'list_updates' => true,
-            'perform_updates' => true,
-            'access_analytics' => true,
-        ]);
+        // Hub settings
+        $hub_url = get_option('peanut_connect_hub_url');
+        $hub_api_key = get_option('peanut_connect_hub_api_key');
+        $hub_last_sync = get_option('peanut_connect_last_hub_sync');
+        $hub_mode = get_option('peanut_connect_hub_mode', 'standard');
+        $tracking_enabled = get_option('peanut_connect_tracking_enabled', false);
+        $track_logged_in = get_option('peanut_connect_track_logged_in', false);
 
         // Get Peanut Suite info
         $peanut_suite = null;
@@ -1002,82 +662,40 @@ class Peanut_Connect_API {
             ];
         }
 
-        // Hub settings
-        $hub_url = get_option('peanut_connect_hub_url');
-        $hub_api_key = get_option('peanut_connect_hub_api_key');
-        $hub_last_sync = get_option('peanut_connect_last_hub_sync');
-        $hub_mode = get_option('peanut_connect_hub_mode', 'standard');
-
         return new WP_REST_Response([
             'success' => true,
             'data' => [
-                'connection' => [
-                    'connected' => !empty($site_key) && !empty($manager_url),
-                    'manager_url' => $manager_url,
-                    'last_sync' => $last_sync,
-                    'site_key' => $site_key,
-                ],
                 'hub' => [
                     'connected' => !empty($hub_url) && !empty($hub_api_key),
                     'url' => $hub_url ?: '',
-                    'api_key' => $hub_api_key ? substr($hub_api_key, 0, 8) . '...' . substr($hub_api_key, -4) : '',
                     'api_key_set' => !empty($hub_api_key),
                     'last_sync' => $hub_last_sync,
                     'mode' => $hub_mode,
+                    'tracking_enabled' => (bool) $tracking_enabled,
+                    'track_logged_in' => (bool) $track_logged_in,
                 ],
-                'permissions' => $permissions,
                 'peanut_suite' => $peanut_suite,
             ],
         ], 200);
     }
 
     /**
-     * Update permissions
+     * Auto-connect to Hub by generating a key locally and sending it to Hub
+     *
+     * This is the preferred connection method:
+     * 1. WordPress generates a random 64-char API key
+     * 2. WordPress sends the key to Hub's /api/v1/sites/connect endpoint
+     * 3. Hub finds the site by URL (must already exist in Hub)
+     * 4. Hub stores the key hash and activates the site
+     * 5. WordPress saves both Hub URL and API key locally
      */
-    public function update_permissions(WP_REST_Request $request): WP_REST_Response {
-        $params = $request->get_json_params();
-
-        $current = get_option('peanut_connect_permissions', [
-            'health_check' => true,
-            'list_updates' => true,
-            'perform_updates' => true,
-            'access_analytics' => true,
-        ]);
-
-        // Always keep health_check and list_updates enabled
-        $updated = [
-            'health_check' => true,
-            'list_updates' => true,
-            'perform_updates' => isset($params['perform_updates']) ? (bool) $params['perform_updates'] : $current['perform_updates'],
-            'access_analytics' => isset($params['access_analytics']) ? (bool) $params['access_analytics'] : $current['access_analytics'],
-        ];
-
-        update_option('peanut_connect_permissions', $updated);
-
-        // Log permission changes
-        foreach (['perform_updates', 'access_analytics'] as $perm) {
-            if ($current[$perm] !== $updated[$perm]) {
-                Peanut_Connect_Activity_Log::log_permission_changed($perm, $updated[$perm]);
-            }
-        }
-
-        return new WP_REST_Response([
-            'success' => true,
-            'data' => $updated,
-        ], 200);
-    }
-
-    /**
-     * Save Hub settings
-     */
-    public function save_hub_settings(WP_REST_Request $request): WP_REST_Response {
+    public function auto_connect_to_hub(WP_REST_Request $request): WP_REST_Response {
         $hub_url = $request->get_param('hub_url');
-        $api_key = $request->get_param('api_key');
 
-        if (empty($hub_url) || empty($api_key)) {
+        if (empty($hub_url)) {
             return new WP_REST_Response([
                 'success' => false,
-                'message' => __('Hub URL and API key are required.', 'peanut-connect'),
+                'message' => __('Hub URL is required.', 'peanut-connect'),
             ], 400);
         }
 
@@ -1089,37 +707,101 @@ class Peanut_Connect_API {
             ], 400);
         }
 
-        // Save settings first (verification happens on heartbeat)
-        update_option('peanut_connect_hub_url', $hub_url);
-        update_option('peanut_connect_hub_api_key', $api_key);
+        // Generate a random 64-character API key
+        $api_key = wp_generate_password(64, false, false);
 
-        // Try to verify connection (optional - may fail due to server config)
-        $test_result = Peanut_Connect_Hub_Sync::verify_hub_connection($hub_url, $api_key);
-        $verified = $test_result['success'] ?? false;
+        // Build the connect endpoint URL
+        $endpoint = rtrim($hub_url, '/') . '/api/v1/sites/connect';
 
-        // Log activity
-        Peanut_Connect_Activity_Log::log('hub_configured', $verified ? 'success' : 'pending', 0, [
-            'hub_url' => $hub_url,
-            'verified' => $verified,
+        // Send the key to Hub
+        $response = wp_remote_post($endpoint, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'site_url' => get_site_url(),
+                'api_key' => $api_key,
+                'connect_version' => PEANUT_CONNECT_VERSION,
+                'wp_version' => get_bloginfo('version'),
+                'php_version' => PHP_VERSION,
+            ]),
+            'timeout' => 30,
         ]);
 
-        // Trigger immediate heartbeat to sync with Hub
-        if ($verified) {
-            Peanut_Connect_Hub_Sync::send_heartbeat();
+        if (is_wp_error($response)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => sprintf(
+                    __('Failed to connect to Hub: %s', 'peanut-connect'),
+                    $response->get_error_message()
+                ),
+            ], 400);
         }
 
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $status_code = wp_remote_retrieve_response_code($response);
+
+        // Check for specific error codes
+        if (!empty($body['code'])) {
+            $error_message = $body['message'] ?? __('Connection failed.', 'peanut-connect');
+
+            switch ($body['code']) {
+                case 'SITE_NOT_FOUND':
+                    $error_message = __('This site is not registered in Hub. Please ask your agency to add this site first.', 'peanut-connect');
+                    break;
+                case 'ALREADY_CONNECTED':
+                    $error_message = __('This site is already connected to Hub. Disconnect from Hub first to reconnect.', 'peanut-connect');
+                    break;
+            }
+
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => $error_message,
+                'code' => $body['code'],
+            ], $status_code);
+        }
+
+        // Check for success
+        // Debug logging
+        error_log('Peanut Connect: Hub response status=' . $status_code . ', success=' . ($body['success'] ?? 'null'));
+
+        if ($status_code >= 200 && $status_code < 300 && ($body['success'] ?? false)) {
+            // Save the Hub URL and API key locally
+            error_log('Peanut Connect: Saving hub_url=' . $hub_url);
+            $url_saved = update_option('peanut_connect_hub_url', $hub_url);
+            error_log('Peanut Connect: hub_url saved=' . ($url_saved ? 'yes' : 'no'));
+
+            error_log('Peanut Connect: Saving api_key (length=' . strlen($api_key) . ')');
+            $key_saved = update_option('peanut_connect_hub_api_key', $api_key);
+            error_log('Peanut Connect: api_key saved=' . ($key_saved ? 'yes' : 'no'));
+
+            // Log activity
+            Peanut_Connect_Activity_Log::log('hub_connected', 'success', 'Connected to Hub', [
+                'hub_url' => $hub_url,
+                'site_name' => $body['site']['name'] ?? '',
+                'agency' => $body['agency']['name'] ?? '',
+            ]);
+
+            // Send initial heartbeat
+            Peanut_Connect_Hub_Sync::send_heartbeat();
+
+            return new WP_REST_Response([
+                'success' => true,
+                'message' => __('Successfully connected to Hub!', 'peanut-connect'),
+                'data' => [
+                    'site' => $body['site'] ?? [],
+                    'client' => $body['client'] ?? [],
+                    'agency' => $body['agency'] ?? [],
+                ],
+            ], 200);
+        }
+
+        // Generic error
         return new WP_REST_Response([
-            'success' => true,
-            'message' => $verified
-                ? __('Hub connection saved and verified.', 'peanut-connect')
-                : __('Hub settings saved. Connection will be verified on next sync.', 'peanut-connect'),
-            'verified' => $verified,
-            'data' => [
-                'site' => $test_result['site'] ?? [],
-                'client' => $test_result['client'] ?? [],
-                'agency' => $test_result['agency'] ?? [],
-            ],
-        ], 200);
+            'success' => false,
+            'message' => $body['message'] ?? __('Failed to connect to Hub.', 'peanut-connect'),
+        ], $status_code ?: 400);
     }
 
     /**
@@ -1160,12 +842,34 @@ class Peanut_Connect_API {
      * Disconnect from Hub
      */
     public function disconnect_hub(WP_REST_Request $request): WP_REST_Response {
+        // Get current Hub URL and API key before deleting
+        $hub_url = get_option('peanut_connect_hub_url');
+        $api_key = get_option('peanut_connect_hub_api_key');
+
+        // Notify Hub about disconnect (best effort - don't fail if Hub is unreachable)
+        if (!empty($hub_url) && !empty($api_key)) {
+            $disconnect_endpoint = rtrim($hub_url, '/') . '/api/v1/sites/disconnect';
+            wp_remote_post($disconnect_endpoint, [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ],
+                'body' => wp_json_encode([
+                    'site_url' => get_site_url(),
+                    'api_key' => $api_key,
+                ]),
+                'timeout' => 10,
+                'blocking' => false, // Don't wait for response
+            ]);
+        }
+
+        // Clear local options
         delete_option('peanut_connect_hub_url');
         delete_option('peanut_connect_hub_api_key');
         delete_option('peanut_connect_last_hub_sync');
 
         // Log activity
-        Peanut_Connect_Activity_Log::log('hub_disconnected', 'info', 0, []);
+        Peanut_Connect_Activity_Log::log_disconnect('admin');
 
         return new WP_REST_Response([
             'success' => true,
@@ -1218,78 +922,13 @@ class Peanut_Connect_API {
     }
 
     /**
-     * Generate site key
-     */
-    public function generate_site_key(WP_REST_Request $request): WP_REST_Response {
-        $site_key = get_option('peanut_connect_site_key');
-
-        if ($site_key) {
-            return new WP_REST_Response([
-                'success' => false,
-                'message' => __('Site key already exists. Use regenerate to create a new one.', 'peanut-connect'),
-            ], 400);
-        }
-
-        $site_key = wp_generate_password(64, false);
-        update_option('peanut_connect_site_key', $site_key);
-
-        // Log activity
-        Peanut_Connect_Activity_Log::log_key_generated();
-
-        return new WP_REST_Response([
-            'success' => true,
-            'data' => [
-                'site_key' => $site_key,
-            ],
-        ], 200);
-    }
-
-    /**
-     * Regenerate site key
-     */
-    public function regenerate_site_key(WP_REST_Request $request): WP_REST_Response {
-        $site_key = wp_generate_password(64, false);
-        update_option('peanut_connect_site_key', $site_key);
-
-        // Clear manager connection since the old key is now invalid
-        delete_option('peanut_connect_manager_url');
-        delete_option('peanut_connect_last_sync');
-
-        // Log activity
-        Peanut_Connect_Activity_Log::log_key_regenerated();
-
-        return new WP_REST_Response([
-            'success' => true,
-            'data' => [
-                'site_key' => $site_key,
-            ],
-        ], 200);
-    }
-
-    /**
-     * Admin disconnect from manager
-     */
-    public function admin_disconnect(WP_REST_Request $request): WP_REST_Response {
-        delete_option('peanut_connect_site_key');
-        delete_option('peanut_connect_manager_url');
-        delete_option('peanut_connect_last_sync');
-
-        // Log activity
-        Peanut_Connect_Activity_Log::log_disconnect('admin');
-
-        return new WP_REST_Response([
-            'success' => true,
-            'message' => __('Disconnected from manager site.', 'peanut-connect'),
-        ], 200);
-    }
-
-    /**
-     * Get dashboard data
+     * Get dashboard data (Hub-focused)
      */
     public function get_dashboard(WP_REST_Request $request): WP_REST_Response {
-        $site_key = get_option('peanut_connect_site_key');
-        $manager_url = get_option('peanut_connect_manager_url');
-        $last_sync = get_option('peanut_connect_last_sync');
+        // Hub connection info
+        $hub_url = get_option('peanut_connect_hub_url');
+        $hub_api_key = get_option('peanut_connect_hub_api_key');
+        $hub_last_sync = get_option('peanut_connect_last_hub_sync');
 
         // Get health summary
         $health_data = Peanut_Connect_Health::get_health_data();
@@ -1358,10 +997,10 @@ class Peanut_Connect_API {
         return new WP_REST_Response([
             'success' => true,
             'data' => [
-                'connection' => [
-                    'connected' => !empty($site_key) && !empty($manager_url),
-                    'manager_url' => $manager_url,
-                    'last_sync' => $last_sync,
+                'hub' => [
+                    'connected' => !empty($hub_url) && !empty($hub_api_key),
+                    'url' => $hub_url ?: '',
+                    'last_sync' => $hub_last_sync,
                 ],
                 'health_summary' => [
                     'status' => $status,
@@ -1381,6 +1020,19 @@ class Peanut_Connect_API {
      * Get health data for admin (no Bearer token required)
      */
     public function get_admin_health(WP_REST_Request $request): WP_REST_Response {
+        $health = Peanut_Connect_Health::get_health_data();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => $health,
+        ], 200);
+    }
+
+    /**
+     * Get health data for Hub (requires Bearer token)
+     * Used to refresh health data after plugin/theme updates
+     */
+    public function get_hub_health(WP_REST_Request $request): WP_REST_Response {
         $health = Peanut_Connect_Health::get_health_data();
 
         return new WP_REST_Response([
@@ -1796,6 +1448,12 @@ class Peanut_Connect_API {
             update_option('peanut_connect_tracking_enabled', (bool) $tracking_enabled);
         }
 
+        // Save track logged-in users setting
+        $track_logged_in = $request->get_param('track_logged_in');
+        if ($track_logged_in !== null) {
+            update_option('peanut_connect_track_logged_in', (bool) $track_logged_in);
+        }
+
         // Save Hub Mode setting (v2.6.0+)
         if ($hub_mode !== null) {
             $valid_modes = ['standard', 'hide_suite', 'disable_suite'];
@@ -2148,6 +1806,56 @@ class Peanut_Connect_API {
             'success' => true,
             'message' => __('Security settings updated.', 'peanut-connect'),
             'data' => $updated,
+        ], 200);
+    }
+
+    // =====================
+    // Permissions Handlers
+    // =====================
+
+    /**
+     * Get hub permissions
+     */
+    public function get_permissions(WP_REST_Request $request): WP_REST_Response {
+        $permissions = get_option('peanut_connect_permissions', [
+            'perform_updates' => false,
+            'access_analytics' => false,
+        ]);
+
+        return new WP_REST_Response([
+            'perform_updates' => !empty($permissions['perform_updates']),
+            'access_analytics' => !empty($permissions['access_analytics']),
+        ], 200);
+    }
+
+    /**
+     * Update hub permissions
+     */
+    public function update_permissions(WP_REST_Request $request): WP_REST_Response {
+        $params = $request->get_json_params();
+        $permissions = get_option('peanut_connect_permissions', [
+            'perform_updates' => false,
+            'access_analytics' => false,
+        ]);
+
+        if (isset($params['perform_updates'])) {
+            $permissions['perform_updates'] = (bool) $params['perform_updates'];
+        }
+
+        if (isset($params['access_analytics'])) {
+            $permissions['access_analytics'] = (bool) $params['access_analytics'];
+        }
+
+        update_option('peanut_connect_permissions', $permissions);
+
+        // Log activity
+        if (class_exists('Peanut_Connect_Activity_Log')) {
+            Peanut_Connect_Activity_Log::log('permissions_updated', 'info', 'Hub permissions changed', $permissions);
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => __('Hub permissions updated.', 'peanut-connect'),
         ], 200);
     }
 

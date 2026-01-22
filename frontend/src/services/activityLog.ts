@@ -91,43 +91,33 @@ export const activityLogger = {
     );
   },
 
-  connectionEstablished: (managerUrl: string) => {
+  hubConnected: (hubUrl: string) => {
     addActivityEntry(
-      'connection_established',
+      'hub_connected',
       'success',
-      'Connected to Manager',
-      `Successfully connected to ${managerUrl}`,
-      { managerUrl }
+      'Connected to Hub',
+      `Successfully connected to ${hubUrl}`,
+      { hubUrl }
     );
   },
 
-  connectionLost: (reason?: string) => {
+  hubDisconnected: (reason?: string) => {
     addActivityEntry(
-      'connection_lost',
+      'hub_disconnected',
       'warning',
-      'Connection Lost',
-      reason || 'Lost connection to the manager site.',
+      'Disconnected from Hub',
+      reason || 'Disconnected from Peanut Hub.',
       { reason }
     );
   },
 
-  keyRegenerated: () => {
+  settingsChanged: (setting: string, value: unknown) => {
     addActivityEntry(
-      'key_regenerated',
+      'settings_changed',
       'info',
-      'Site Key Regenerated',
-      'A new site key was generated. Update your manager with the new key.',
-      {}
-    );
-  },
-
-  permissionChanged: (permission: string, enabled: boolean) => {
-    addActivityEntry(
-      'permission_changed',
-      'info',
-      'Permission Updated',
-      `${permission} was ${enabled ? 'enabled' : 'disabled'}.`,
-      { permission, enabled }
+      'Settings Updated',
+      `${setting} was changed.`,
+      { setting, value }
     );
   },
 };

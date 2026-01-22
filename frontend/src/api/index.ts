@@ -4,7 +4,9 @@ export {
   settingsApi,
   healthApi,
   updatesApi,
-  verifyApi,
-  analyticsApi,
   dashboardApi,
+  errorLogApi,
+  securityApi,
+  permissionsApi,
+  trackingApi,
 } from './endpoints';

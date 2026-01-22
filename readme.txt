@@ -4,7 +4,7 @@ Tags: monitor, management, multisite, updates, health
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 8.0
-Stable tag: 2.6.3
+Stable tag: 3.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,53 @@ Yes. Peanut Connect works on any WordPress site. If Peanut Suite is also install
 No. Peanut Connect only responds to authenticated API requests from your manager site. It adds no overhead to normal site operations.
 
 == Changelog ==
+
+= 3.0.9 =
+* Fix toggle button labels for clarity (On/Off instead of confusing Enabled/Disabled)
+* Toggle now shows green when security feature is active
+
+= 3.0.8 =
+* Fix CSS bleed affecting WordPress admin menu
+* Scope Tailwind styles to prevent interference with WP admin
+
+= 3.0.7 =
+* Add Security Hardening section to Settings page
+* Add Hub Permissions section to control what Hub can access
+* Security features: Disable XML-RPC, Hide WP Version, Disable Comments, Custom Login URL
+* Hub permissions: Allow/deny remote updates and analytics access
+* Add Track Logged-In Users toggle
+
+= 3.0.6 =
+* Add Visitor Tracking toggle to Settings page
+* Enable/disable pageview and visitor tracking from UI
+* Tracking data syncs to Hub for Top Pages and Traffic Sources analytics
+
+= 3.0.5 =
+* Add Debug & Logging section to Settings page
+* Display error counts and quick access to Error Log
+* Toggle error logging on/off from Settings
+
+= 3.0.4 =
+* React SPA admin interface improvements
+* Bug fixes and performance improvements
+
+= 3.0.0 =
+* Complete React SPA admin interface
+* Dashboard with health summary, updates, and Hub status
+* Health monitoring page with detailed checks
+* Updates page with one-click update management
+* Activity log for tracking site events
+* Error log with filtering and export
+* Settings page with Hub connection management
+* Hub Mode feature (standard, hide Suite, disable Suite)
+
+= 2.6.5 =
+* Fix SSL detection in WP-CLI context
+* End-to-end sync verification with Hub
+
+= 2.6.0 =
+* Hub Mode feature - control Peanut Suite behavior when connected
+* Early filter registration for disable_suite mode
 
 = 2.3.0 =
 * NEW: Hub integration for centralized agency management

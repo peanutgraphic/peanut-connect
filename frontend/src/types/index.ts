@@ -5,37 +5,20 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-// Connection status
-export interface ConnectionStatus {
-  connected: boolean;
-  manager_url: string | null;
-  last_sync: string | null;
-  site_key: string | null;
-}
-
-// Permissions
-export interface Permissions {
-  health_check: boolean;
-  list_updates: boolean;
-  perform_updates: boolean;
-  access_analytics: boolean;
-}
-
 // Hub connection status
 export interface HubStatus {
   connected: boolean;
   url: string;
-  api_key: string;
   api_key_set: boolean;
   last_sync: string | null;
   mode: 'standard' | 'hide_suite' | 'disable_suite';
+  tracking_enabled: boolean;
+  track_logged_in: boolean;
 }
 
-// Settings
+// Settings (Hub-focused)
 export interface Settings {
-  connection: ConnectionStatus;
   hub: HubStatus;
-  permissions: Permissions;
   peanut_suite: PeanutSuiteInfo | null;
 }
 
@@ -189,32 +172,6 @@ export interface UpdateResult {
   slug: string;
 }
 
-// Verify endpoint response
-export interface VerifyResponse {
-  site_name: string;
-  site_url: string;
-  wordpress_version: string;
-  permissions: Permissions;
-  peanut_suite: PeanutSuiteInfo | null;
-  health_summary: {
-    plugins_need_update: number;
-    themes_need_update: number;
-    core_needs_update: boolean;
-  };
-}
-
-// Analytics data (from Peanut Suite)
-export interface AnalyticsData {
-  period: string;
-  contacts: {
-    total: number;
-    new: number;
-  };
-  utm_clicks: number;
-  link_clicks: number;
-  form_submissions: number;
-}
-
 // Navigation item
 export interface NavItem {
   name: string;
@@ -227,10 +184,8 @@ export type ActivityType =
   | 'health_check'
   | 'update_installed'
   | 'update_failed'
-  | 'connection_established'
-  | 'connection_lost'
-  | 'key_regenerated'
-  | 'permission_changed'
+  | 'hub_connected'
+  | 'hub_disconnected'
   | 'settings_changed';
 
 export type ActivityStatus = 'success' | 'warning' | 'error' | 'info';
@@ -279,4 +234,32 @@ export interface ErrorCountsData {
   all_time: ErrorCounts;
   last_24h: ErrorCounts;
   logging_enabled: boolean;
+}
+
+// Security Settings
+export interface SecuritySettings {
+  hide_login: {
+    enabled: boolean;
+    custom_slug: string;
+    available: boolean;
+  };
+  disable_comments: {
+    enabled: boolean;
+    hide_existing: boolean;
+  };
+  disable_xmlrpc: boolean;
+  disable_file_editing: boolean;
+  remove_version: boolean;
+}
+
+// Hub Permissions
+export interface HubPermissions {
+  perform_updates: boolean;
+  access_analytics: boolean;
+}
+
+// Tracking Settings
+export interface TrackingSettings {
+  enabled: boolean;
+  track_logged_in: boolean;
 }

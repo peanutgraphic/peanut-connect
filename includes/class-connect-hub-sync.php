@@ -34,6 +34,9 @@ class Peanut_Connect_Hub_Sync {
         // Register cron hook
         add_action('peanut_connect_sync_to_hub', [__CLASS__, 'run_sync']);
 
+        // Register hook for Hub-requested immediate sync
+        add_action('peanut_connect_sync_requested', [__CLASS__, 'run_sync']);
+
         // Schedule cron if not already
         if (!wp_next_scheduled('peanut_connect_sync_to_hub')) {
             wp_schedule_event(time(), 'peanut_fifteen_minutes', 'peanut_connect_sync_to_hub');
@@ -453,9 +456,20 @@ class Peanut_Connect_Hub_Sync {
                 update_option('peanut_connect_hub_popups', $body['popups']);
             }
 
+            // Check if Hub requested an immediate sync
+            $syncNow = $body['sync_now'] ?? false;
+            if ($syncNow) {
+                // Trigger sync immediately (async-style to avoid blocking)
+                // Use wp_schedule_single_event to run sync in the background
+                if (!wp_next_scheduled('peanut_connect_sync_requested')) {
+                    wp_schedule_single_event(time(), 'peanut_connect_sync_requested');
+                }
+            }
+
             return [
                 'success' => true,
                 'sync_enabled' => $body['sync_enabled'] ?? true,
+                'sync_now' => $syncNow,
                 'popups' => $body['popups'] ?? [],
             ];
         }

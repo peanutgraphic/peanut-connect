@@ -95,6 +95,7 @@ class Peanut_Connect_Database {
             utm_campaign varchar(255) DEFAULT NULL,
             utm_term varchar(255) DEFAULT NULL,
             utm_content varchar(255) DEFAULT NULL,
+            click_id varchar(36) DEFAULT NULL,
             metadata longtext DEFAULT NULL,
             occurred_at datetime NOT NULL,
             synced tinyint(1) DEFAULT 0,
@@ -103,7 +104,8 @@ class Peanut_Connect_Database {
             KEY visitor_id (visitor_id),
             KEY event_type (event_type),
             KEY synced (synced),
-            KEY occurred_at (occurred_at)
+            KEY occurred_at (occurred_at),
+            KEY click_id (click_id)
         ) $charset_collate;";
         dbDelta($sql_events);
 

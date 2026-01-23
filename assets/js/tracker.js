@@ -17,6 +17,7 @@
 
     const config = peanutConnectTracker;
     let visitorId = config.visitorId;
+    let clickId = config.clickId || null;
 
     /**
      * Set visitor ID cookie
@@ -36,6 +37,46 @@
     }
 
     /**
+     * Get click_id from URL or cookie (for Hub journey tracking)
+     */
+    function getClickId() {
+        // Check URL first (new visit from Hub short link)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlClickId = urlParams.get('click_id');
+        if (urlClickId && /^[a-f0-9\-]{36}$/i.test(urlClickId)) {
+            setClickIdCookie(urlClickId);
+            return urlClickId;
+        }
+
+        // Check cookie (subsequent pageviews in same journey)
+        const cookieClickId = getClickIdFromCookie();
+        if (cookieClickId) {
+            return cookieClickId;
+        }
+
+        return null;
+    }
+
+    /**
+     * Set click_id cookie
+     */
+    function setClickIdCookie(id) {
+        if (!config.clickIdCookie || !config.clickIdExpiry) return;
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (config.clickIdExpiry * 1000));
+        document.cookie = `${config.clickIdCookie}=${id};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+    }
+
+    /**
+     * Get click_id from cookie
+     */
+    function getClickIdFromCookie() {
+        if (!config.clickIdCookie) return null;
+        const match = document.cookie.match(new RegExp('(^| )' + config.clickIdCookie + '=([^;]+)'));
+        return match ? match[2] : null;
+    }
+
+    /**
      * Track an event via REST API
      */
     function trackEvent(eventType, eventData = {}) {
@@ -48,6 +89,11 @@
             ...eventData,
             occurred_at: new Date().toISOString(),
         };
+
+        // Add click_id for Hub journey tracking
+        if (clickId) {
+            data.click_id = clickId;
+        }
 
         // Add UTM params if present
         const urlParams = new URLSearchParams(window.location.search);
@@ -236,9 +282,16 @@
      * Initialize
      */
     function init() {
-        // Ensure cookie is set
+        // Ensure visitor cookie is set
         if (!getVisitorFromCookie()) {
             setVisitorCookie();
+        }
+
+        // Check for Hub click_id (journey tracking)
+        // This captures click_id from URL and stores in cookie for subsequent pageviews
+        const detectedClickId = getClickId();
+        if (detectedClickId) {
+            clickId = detectedClickId;
         }
 
         // Enable tracking features

@@ -23,6 +23,16 @@ class Peanut_Connect_Tracker {
     const COOKIE_NAME = 'peanut_vid';
 
     /**
+     * Hub click ID cookie name (for journey tracking)
+     */
+    const CLICK_ID_COOKIE = 'peanut_click_id';
+
+    /**
+     * Click ID cookie expiry (24 hours - journeys are typically short-lived)
+     */
+    const CLICK_ID_EXPIRY = 86400;
+
+    /**
      * Cookie expiry (1 year)
      */
     const COOKIE_EXPIRY = 31536000;
@@ -31,6 +41,11 @@ class Peanut_Connect_Tracker {
      * Current visitor ID
      */
     private static ?string $visitor_id = null;
+
+    /**
+     * Current Hub click ID (for journey tracking)
+     */
+    private static ?string $click_id = null;
 
     /**
      * Initialize tracker
@@ -187,6 +202,7 @@ class Peanut_Connect_Tracker {
 
         $table = Peanut_Connect_Database::table('events');
         $utm = self::get_utm_params();
+        $click_id = $data['click_id'] ?? self::get_click_id();
 
         $wpdb->insert(
             $table,
@@ -201,11 +217,12 @@ class Peanut_Connect_Tracker {
                 'utm_campaign' => $utm['campaign'] ?? null,
                 'utm_term' => $utm['term'] ?? null,
                 'utm_content' => $utm['content'] ?? null,
+                'click_id' => $click_id,
                 'metadata' => isset($data['metadata']) ? wp_json_encode($data['metadata']) : null,
                 'occurred_at' => current_time('mysql', true),
                 'synced' => 0,
             ],
-            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d']
+            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d']
         );
 
         return (int) $wpdb->insert_id;
@@ -344,6 +361,43 @@ class Peanut_Connect_Tracker {
             'term' => isset($_GET['utm_term']) ? sanitize_text_field($_GET['utm_term']) : null,
             'content' => isset($_GET['utm_content']) ? sanitize_text_field($_GET['utm_content']) : null,
         ];
+    }
+
+    /**
+     * Get Hub click ID from URL or cookie (for journey tracking)
+     *
+     * When a visitor arrives via a Hub short link, the click_id parameter
+     * is appended to the URL. We capture it and store it in a cookie so
+     * subsequent pageviews can be linked to the same journey.
+     *
+     * @return string|null The click ID if present
+     */
+    public static function get_click_id(): ?string {
+        if (self::$click_id !== null) {
+            return self::$click_id;
+        }
+
+        // Check URL first (new visit from Hub short link)
+        if (isset($_GET['click_id'])) {
+            $click_id = sanitize_text_field($_GET['click_id']);
+            // Validate it looks like a UUID
+            if (preg_match('/^[a-f0-9\-]{36}$/i', $click_id)) {
+                self::$click_id = $click_id;
+                // Cookie will be set via JavaScript for better compatibility
+                return self::$click_id;
+            }
+        }
+
+        // Check cookie (subsequent pageviews in same journey)
+        if (isset($_COOKIE[self::CLICK_ID_COOKIE])) {
+            $click_id = sanitize_text_field($_COOKIE[self::CLICK_ID_COOKIE]);
+            if (preg_match('/^[a-f0-9\-]{36}$/i', $click_id)) {
+                self::$click_id = $click_id;
+                return self::$click_id;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -505,6 +559,10 @@ class Peanut_Connect_Tracker {
             'visitorId' => self::get_visitor_id(),
             'cookieName' => self::COOKIE_NAME,
             'cookieExpiry' => self::COOKIE_EXPIRY,
+            // Hub journey tracking
+            'clickId' => self::get_click_id(),
+            'clickIdCookie' => self::CLICK_ID_COOKIE,
+            'clickIdExpiry' => self::CLICK_ID_EXPIRY,
         ]);
     }
 }

@@ -12,7 +12,7 @@ import {
   InfoPanel,
   SettingsSkeleton,
 } from '@/components/common';
-import { settingsApi, errorLogApi, securityApi, permissionsApi, trackingApi } from '@/api';
+import { settingsApi, errorLogApi, securityApi, permissionsApi, trackingApi, updatesApi } from '@/api';
 import { Link } from 'react-router-dom';
 import {
   RefreshCw,
@@ -199,6 +199,21 @@ export default function Settings() {
 
   // Login slug state
   const [loginSlug, setLoginSlug] = useState('');
+
+  // Check for updates mutation
+  const checkForUpdatesMutation = useMutation({
+    mutationFn: updatesApi.checkForUpdates,
+    onSuccess: (data) => {
+      if (data.data.update_available) {
+        toast.success(`Update available: v${data.data.latest_version}. Check the Updates page.`);
+      } else {
+        toast.success(`You're running the latest version (v${data.data.current_version}).`);
+      }
+    },
+    onError: (err) => {
+      toast.error((err as Error).message || 'Failed to check for updates');
+    },
+  });
 
   if (isLoading) {
     return (
@@ -981,6 +996,41 @@ export default function Settings() {
           </div>
         </Card>
       )}
+
+      {/* Plugin Updates */}
+      <Card className="mb-6">
+        <CardHeader
+          title={
+            <span className="flex items-center gap-2">
+              <Download className="w-5 h-5" />
+              Plugin Updates
+              <HelpTooltip content="Force check for Peanut Connect updates. This clears the update cache and checks the server for new versions." />
+            </span>
+          }
+        />
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Update checks are cached for 12 hours. Use this button to force an immediate check for new versions.
+          </p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => checkForUpdatesMutation.mutate()}
+              loading={checkForUpdatesMutation.isPending}
+              icon={<RefreshCw className="w-4 h-4" />}
+            >
+              Check for Updates
+            </Button>
+            <Link
+              to="/updates"
+              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
+              View Updates Page
+              <ExternalLink className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </Card>
 
       {/* Hub Disconnect Modal */}
       <ConfirmModal

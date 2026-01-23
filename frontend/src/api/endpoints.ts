@@ -96,6 +96,20 @@ export const updatesApi = {
     const response = await api.post('/admin/update', { type, slug });
     return response.data;
   },
+
+  // Force check for updates (clears cache)
+  checkForUpdates: async (): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      current_version: string;
+      latest_version: string;
+      update_available: boolean;
+    };
+  }> => {
+    const response = await api.post('/admin/check-updates');
+    return response.data;
+  },
 };
 
 // Dashboard API (combined data for dashboard)

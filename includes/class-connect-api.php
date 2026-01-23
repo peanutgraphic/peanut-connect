@@ -116,6 +116,13 @@ class Peanut_Connect_API {
             ],
         ]);
 
+        // Force check for plugin updates (clears cache)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/admin/check-updates', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'force_check_updates'],
+            'permission_callback' => [$this, 'admin_permission_check'],
+        ]);
+
         // =====================
         // Error Log endpoints
         // =====================
@@ -1073,6 +1080,41 @@ class Peanut_Connect_API {
         return new WP_REST_Response([
             'success' => true,
             'data' => $result,
+        ], 200);
+    }
+
+    /**
+     * Force check for plugin updates by clearing cache
+     */
+    public function force_check_updates(WP_REST_Request $request): WP_REST_Response {
+        // Clear the self-updater cache
+        $updater = new Peanut_Connect_Self_Updater();
+        $updater->clear_update_cache();
+
+        // Force WordPress to re-check updates
+        delete_site_transient('update_plugins');
+        delete_site_transient('update_themes');
+        delete_site_transient('update_core');
+
+        // Trigger fresh update check
+        wp_clean_plugins_cache(true);
+        wp_update_plugins();
+
+        // Get current plugin version
+        $plugin_data = get_plugin_data(PEANUT_CONNECT_FILE);
+        $current_version = $plugin_data['Version'] ?? '0.0.0';
+
+        // Get fresh update info
+        $update_info = $updater->force_update_check();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => __('Update cache cleared. Check the Updates page for available updates.', 'peanut-connect'),
+            'data' => [
+                'current_version' => $current_version,
+                'latest_version' => $update_info->version ?? $current_version,
+                'update_available' => $update_info && isset($update_info->version) && version_compare($update_info->version, $current_version, '>'),
+            ],
         ], 200);
     }
 

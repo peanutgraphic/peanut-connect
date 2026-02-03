@@ -107,6 +107,9 @@ class Peanut_Connect_Health {
 
     /**
      * Get SSL certificate data (with caching)
+     *
+     * Actually connects to the server to verify SSL certificate exists,
+     * regardless of WordPress URL settings.
      */
     private static function get_ssl_data(): array {
         // Check cache first - SSL data is expensive to fetch
@@ -117,56 +120,64 @@ class Peanut_Connect_Health {
             return $cached;
         }
 
-        // Check if site URL uses HTTPS (is_ssl() fails in WP-CLI context)
+        // Get the host from site URL
         $site_url = get_site_url();
-        $is_ssl = strpos($site_url, 'https://') === 0;
+        $parsed = wp_parse_url($site_url);
+        $host = $parsed['host'] ?? '';
 
         $data = [
-            'enabled' => $is_ssl,
-            'valid' => $is_ssl,
+            'enabled' => false,
+            'valid' => false,
             'days_until_expiry' => null,
             'issuer' => null,
+            'wp_url_is_https' => strpos($site_url, 'https://') === 0,
         ];
 
-        if ($is_ssl) {
-            $parsed = wp_parse_url($site_url);
-            $host = $parsed['host'] ?? '';
+        if (!$host) {
+            set_transient($cache_key, $data, self::SSL_CACHE_TTL);
+            return $data;
+        }
 
-            if ($host) {
-                $context = stream_context_create([
-                    'ssl' => [
-                        'capture_peer_cert' => true,
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
-                    ],
-                ]);
+        // Actually try to connect via SSL to check if certificate exists
+        // This works regardless of whether WordPress URL is http or https
+        $context = stream_context_create([
+            'ssl' => [
+                'capture_peer_cert' => true,
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
 
-                $socket = @stream_socket_client(
-                    "ssl://{$host}:443",
-                    $errno,
-                    $errstr,
-                    10,
-                    STREAM_CLIENT_CONNECT,
-                    $context
-                );
+        $socket = @stream_socket_client(
+            "ssl://{$host}:443",
+            $errno,
+            $errstr,
+            10,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
 
-                if ($socket) {
-                    $params = stream_context_get_params($socket);
-                    $cert = openssl_x509_parse($params['options']['ssl']['peer_certificate'] ?? '');
+        if ($socket) {
+            $params = stream_context_get_params($socket);
+            $cert_resource = $params['options']['ssl']['peer_certificate'] ?? null;
 
-                    if ($cert) {
-                        $valid_to = $cert['validTo_time_t'] ?? 0;
-                        $days_remaining = ($valid_to - time()) / DAY_IN_SECONDS;
+            if ($cert_resource) {
+                $cert = openssl_x509_parse($cert_resource);
 
-                        $data['days_until_expiry'] = (int) $days_remaining;
-                        $data['valid'] = $days_remaining > 0;
-                        $data['issuer'] = $cert['issuer']['O'] ?? $cert['issuer']['CN'] ?? 'Unknown';
-                        $data['expires_at'] = date('Y-m-d H:i:s', $valid_to);
-                    }
+                if ($cert) {
+                    $valid_to = $cert['validTo_time_t'] ?? 0;
+                    $days_remaining = ($valid_to - time()) / DAY_IN_SECONDS;
 
-                    fclose($socket);
+                    // SSL is enabled if we can connect and get a certificate
+                    $data['enabled'] = true;
+                    $data['days_until_expiry'] = (int) $days_remaining;
+                    $data['valid'] = $days_remaining > 0;
+                    $data['issuer'] = $cert['issuer']['O'] ?? $cert['issuer']['CN'] ?? 'Unknown';
+                    $data['expires_at'] = date('Y-m-d H:i:s', $valid_to);
                 }
             }
+
+            fclose($socket);
         }
 
         // Cache SSL data for 5 minutes

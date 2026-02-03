@@ -5,6 +5,12 @@ All notable changes to Peanut Connect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2026-02-02
+
+### Fixed
+- SSL detection now actually checks for certificate instead of relying on WordPress URL setting
+- Sites with SSL certificates now correctly show as SSL enabled even if WordPress URL is http://
+
 ## [2.6.3] - 2026-01-11
 
 ### Added

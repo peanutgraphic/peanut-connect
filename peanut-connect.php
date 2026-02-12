@@ -3,7 +3,7 @@
  * Plugin Name: Peanut Connect
  * Plugin URI: https://peanutgraphic.com/peanut-connect
  * Description: Connector plugin for Peanut Hub. Enables centralized site health monitoring and management from your agency dashboard.
- * Version: 3.2.2
+ * Version: 3.3.3
  * Author: Peanut Graphic
  * Author URI: https://peanutgraphic.com
  * License: GPL-2.0-or-later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PEANUT_CONNECT_VERSION', '3.2.2');
+define('PEANUT_CONNECT_VERSION', '3.3.3');
 define('PEANUT_CONNECT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PEANUT_CONNECT_API_NAMESPACE', 'peanut-connect/v1');
 
@@ -81,12 +81,27 @@ final class Peanut_Connect {
         // Security hardening (v2.5.0+)
         require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-security.php';
 
+        // API proxy for Hub (v3.3.0+)
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-api-proxy.php';
+
+        // Event banner for Hub (v3.3.0+)
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-event-banner.php';
+
+        // Forms integration for Hub (v3.3.0+)
+        require_once PEANUT_CONNECT_PLUGIN_DIR . 'includes/class-connect-forms.php';
+
         // Initialize logging early
         Peanut_Connect_Activity_Log::init();
         Peanut_Connect_Error_Log::init();
 
         // Initialize security features
         Peanut_Connect_Security::init();
+
+        // Initialize event banner
+        Peanut_Connect_Event_Banner::init();
+
+        // Initialize forms integration
+        Peanut_Connect_Forms::init();
 
         // Initialize self-updater early so update check filter is registered
         new Peanut_Connect_Self_Updater();
@@ -379,6 +394,7 @@ final class Peanut_Connect {
             'list_updates' => true, // Always allowed
             'perform_updates' => !empty($input['perform_updates']),
             'access_analytics' => !empty($input['access_analytics']),
+            'api_proxy' => !empty($input['api_proxy']),
         ];
     }
 

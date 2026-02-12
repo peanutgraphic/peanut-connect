@@ -960,6 +960,40 @@ export default function Settings() {
               </button>
             </div>
 
+            {/* API Proxy */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Cloud className="w-4 h-4 text-slate-600" />
+                  <span className="font-medium text-slate-900">API Proxy</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Allow Hub to route external API requests through this site.
+                </p>
+              </div>
+              <button
+                onClick={() => updatePermissionsMutation.mutate({ api_proxy: !permissions?.api_proxy })}
+                disabled={updatePermissionsMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  permissions?.api_proxy
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {permissions?.api_proxy ? (
+                  <>
+                    <ToggleRight className="w-5 h-5" />
+                    Allowed
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-5 h-5" />
+                    Denied
+                  </>
+                )}
+              </button>
+            </div>
+
             {/* Track Logged-In Users */}
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
               <div className="flex-1">

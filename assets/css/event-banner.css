@@ -1,0 +1,160 @@
+/**
+ * Peanut Connect Event Banner Styles
+ *
+ * Styles for PTR (Peak Time Rebates) event announcement banners.
+ *
+ * @since 3.3.0
+ */
+
+/* Base banner styles */
+.peanut-event-banner {
+    padding: 12px 20px;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1.5;
+    z-index: 99999;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* Position: relative top (pushes content down) */
+.peanut-event-banner--top {
+    position: relative;
+}
+
+/* Position: relative bottom */
+.peanut-event-banner--bottom {
+    position: relative;
+}
+
+/* Position: fixed top (overlay) */
+.peanut-event-banner--fixed-top {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+/* Position: fixed bottom (overlay) */
+.peanut-event-banner--fixed-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+/* Banner link styles */
+.peanut-event-banner a {
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.peanut-event-banner a:hover {
+    text-decoration: none;
+}
+
+/* Strong text emphasis */
+.peanut-event-banner strong {
+    font-weight: 700;
+}
+
+/* Body offset when fixed banner is shown */
+body.has-peanut-banner-fixed-top {
+    padding-top: var(--peanut-banner-height, 80px);
+}
+
+body.has-peanut-banner-fixed-bottom {
+    padding-bottom: var(--peanut-banner-height, 80px);
+}
+
+/* WordPress admin bar adjustment */
+.admin-bar .peanut-event-banner--fixed-top {
+    top: 32px;
+}
+
+@media screen and (max-width: 782px) {
+    .admin-bar .peanut-event-banner--fixed-top {
+        top: 46px;
+    }
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+    .peanut-event-banner {
+        padding: 10px 15px;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    body.has-peanut-banner-fixed-top {
+        padding-top: var(--peanut-banner-height-mobile, 100px);
+    }
+
+    body.has-peanut-banner-fixed-bottom {
+        padding-bottom: var(--peanut-banner-height-mobile, 100px);
+    }
+}
+
+/* Close button (optional, for future use) */
+.peanut-event-banner__close {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    opacity: 0.7;
+    padding: 5px;
+}
+
+.peanut-event-banner__close:hover {
+    opacity: 1;
+}
+
+/* Animation for banner appearance */
+@keyframes peanut-banner-slide-down {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes peanut-banner-slide-up {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.peanut-event-banner--fixed-top {
+    animation: peanut-banner-slide-down 0.3s ease-out;
+}
+
+.peanut-event-banner--fixed-bottom {
+    animation: peanut-banner-slide-up 0.3s ease-out;
+}
+
+/* Print styles - hide banner when printing */
+@media print {
+    .peanut-event-banner {
+        display: none !important;
+    }
+
+    body.has-peanut-banner-fixed-top,
+    body.has-peanut-banner-fixed-bottom {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}

@@ -20,7 +20,7 @@ class Peanut_Connect_Database {
     /**
      * Database version
      */
-    const DB_VERSION = '1.0.0';
+    const DB_VERSION = '1.1.0';
 
     /**
      * Option name for DB version
@@ -184,6 +184,51 @@ class Peanut_Connect_Database {
             UNIQUE KEY data_type (data_type)
         ) $charset_collate;";
         dbDelta($sql_sync_state);
+
+        // Hub forms cache - stores forms synced from Hub
+        $table_hub_forms = $wpdb->prefix . 'peanut_connect_hub_forms';
+        $sql_hub_forms = "CREATE TABLE $table_hub_forms (
+            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            hub_form_id bigint(20) UNSIGNED NOT NULL,
+            slug varchar(255) NOT NULL,
+            name varchar(255) NOT NULL,
+            form_type varchar(50) DEFAULT 'contact',
+            fields longtext NOT NULL,
+            steps longtext DEFAULT NULL,
+            settings longtext DEFAULT NULL,
+            status varchar(20) DEFAULT 'active',
+            version int DEFAULT 1,
+            synced_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY hub_form_id (hub_form_id),
+            KEY slug (slug),
+            KEY status (status)
+        ) $charset_collate;";
+        dbDelta($sql_hub_forms);
+
+        // Form submissions - stores submissions from Hub forms and FormFlow
+        $table_form_submissions = $wpdb->prefix . 'peanut_connect_form_submissions';
+        $sql_form_submissions = "CREATE TABLE $table_form_submissions (
+            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            source varchar(20) NOT NULL,
+            form_id bigint(20) UNSIGNED DEFAULT NULL,
+            hub_form_id bigint(20) UNSIGNED DEFAULT NULL,
+            formflow_instance_id bigint(20) UNSIGNED DEFAULT NULL,
+            visitor_id varchar(64) DEFAULT NULL,
+            submission_uuid varchar(36) NOT NULL,
+            form_name varchar(255) DEFAULT NULL,
+            data longtext NOT NULL,
+            metadata longtext DEFAULT NULL,
+            status varchar(50) DEFAULT 'submitted',
+            submitted_at datetime NOT NULL,
+            synced tinyint(1) DEFAULT 0,
+            synced_at datetime DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY submission_uuid (submission_uuid),
+            KEY source (source),
+            KEY synced (synced)
+        ) $charset_collate;";
+        dbDelta($sql_form_submissions);
     }
 
     /**
@@ -199,6 +244,8 @@ class Peanut_Connect_Database {
             $wpdb->prefix . 'peanut_connect_conversions',
             $wpdb->prefix . 'peanut_connect_popup_interactions',
             $wpdb->prefix . 'peanut_connect_sync_state',
+            $wpdb->prefix . 'peanut_connect_hub_forms',
+            $wpdb->prefix . 'peanut_connect_form_submissions',
         ];
 
         foreach ($tables as $table) {
@@ -252,7 +299,7 @@ class Peanut_Connect_Database {
         global $wpdb;
 
         $counts = [];
-        $tables = ['visitors', 'events', 'touches', 'conversions', 'popup_interactions'];
+        $tables = ['visitors', 'events', 'touches', 'conversions', 'popup_interactions', 'form_submissions'];
 
         foreach ($tables as $table) {
             $table_name = self::table($table);

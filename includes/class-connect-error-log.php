@@ -70,7 +70,7 @@ class Peanut_Connect_Error_Log {
         self::$log_file = self::$log_dir . '/error-log.json';
 
         // Only enable if setting is on (default: on)
-        if (!get_option('peanut_connect_error_logging', true)) {
+        if (get_option('peanut_connect_error_logging', '1') === '0') {
             return;
         }
 

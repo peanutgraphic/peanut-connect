@@ -504,6 +504,34 @@ class Peanut_Connect_API {
             'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
         ]);
 
+        // API Proxy for Hub (v3.3.0+)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/hub/api-proxy', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [Peanut_Connect_API_Proxy::class, 'handle_request'],
+            'permission_callback' => Peanut_Connect_Auth::hub_permission_callback_for('api_proxy'),
+            'args' => [
+                'url' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'esc_url_raw',
+                ],
+                'method' => [
+                    'default' => 'GET',
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'params' => [
+                    'default' => [],
+                    'type' => 'object',
+                ],
+                'timeout' => [
+                    'default' => 30,
+                    'type' => 'integer',
+                    'sanitize_callback' => 'absint',
+                ],
+            ],
+        ]);
+
         // =====================
         // Hub Tracking endpoints (public, for frontend tracking)
         // =====================
@@ -613,6 +641,106 @@ class Peanut_Connect_API {
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => [$this, 'disconnect_from_hub'],
             'permission_callback' => [$this, 'admin_permission_check'],
+        ]);
+
+        // =====================
+        // Status & Diagnostics endpoints (for Hub API Tester)
+        // =====================
+
+        // Public status endpoint (used by Hub to verify connectivity)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/status', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_public_status'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+        ]);
+
+        // Form sync diagnostics (used by Hub API Tester)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/forms/diagnostics', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_forms_diagnostics'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+        ]);
+
+        // Test form sync (validates forms can be received from Hub)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/forms/test-sync', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'test_form_sync'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+        ]);
+
+        // =====================
+        // Event Banner endpoints (v3.3.0+)
+        // =====================
+
+        // Show banner (Hub command)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/banner/show', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'show_event_banner'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+            'args' => [
+                'deployment_id' => [
+                    'required' => true,
+                    'type' => 'integer',
+                    'sanitize_callback' => 'absint',
+                ],
+                'event_id' => [
+                    'required' => true,
+                    'type' => 'integer',
+                    'sanitize_callback' => 'absint',
+                ],
+                'html' => [
+                    'required' => true,
+                    'type' => 'string',
+                ],
+                'css' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'position' => [
+                    'type' => 'string',
+                    'default' => 'top',
+                    'enum' => ['top', 'bottom', 'fixed-top', 'fixed-bottom'],
+                ],
+                'show_at' => [
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'hide_at' => [
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'is_test' => [
+                    'type' => 'boolean',
+                    'default' => false,
+                ],
+            ],
+        ]);
+
+        // Hide banner (Hub command)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/banner/hide', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'hide_event_banner'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+            'args' => [
+                'deployment_id' => [
+                    'type' => 'integer',
+                    'sanitize_callback' => 'absint',
+                ],
+            ],
+        ]);
+
+        // Get banner status
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/banner/status', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_banner_status'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
+        ]);
+
+        // Banner diagnostics (for API tester)
+        register_rest_route(PEANUT_CONNECT_API_NAMESPACE, '/banner/diagnostics', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_banner_diagnostics'],
+            'permission_callback' => [Peanut_Connect_Auth::class, 'hub_permission_callback'],
         ]);
     }
 
@@ -1143,7 +1271,7 @@ class Peanut_Connect_API {
             'data' => [
                 'entries' => $entries,
                 'counts' => $counts,
-                'logging_enabled' => get_option('peanut_connect_error_logging', true),
+                'logging_enabled' => get_option('peanut_connect_error_logging', '1') !== '0',
             ],
         ], 200);
     }
@@ -1160,7 +1288,7 @@ class Peanut_Connect_API {
             'data' => [
                 'all_time' => $counts,
                 'last_24h' => $recent,
-                'logging_enabled' => get_option('peanut_connect_error_logging', true),
+                'logging_enabled' => get_option('peanut_connect_error_logging', '1') !== '0',
             ],
         ], 200);
     }
@@ -1201,13 +1329,13 @@ class Peanut_Connect_API {
         $params = $request->get_json_params();
 
         if (isset($params['enabled'])) {
-            update_option('peanut_connect_error_logging', (bool) $params['enabled']);
+            update_option('peanut_connect_error_logging', $params['enabled'] ? '1' : '0');
         }
 
         return new WP_REST_Response([
             'success' => true,
             'data' => [
-                'logging_enabled' => get_option('peanut_connect_error_logging', true),
+                'logging_enabled' => get_option('peanut_connect_error_logging', '1') !== '0',
             ],
         ], 200);
     }
@@ -1780,9 +1908,9 @@ class Peanut_Connect_API {
                         'enabled' => false,
                         'hide_existing' => false,
                     ],
-                    'disable_xmlrpc' => get_option('peanut_connect_disable_xmlrpc', false),
+                    'disable_xmlrpc' => get_option('peanut_connect_disable_xmlrpc', '0') === '1',
                     'disable_file_editing' => defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT,
-                    'remove_version' => get_option('peanut_connect_remove_version', false),
+                    'remove_version' => get_option('peanut_connect_remove_version', '0') === '1',
                 ],
             ], 200);
         }
@@ -1804,30 +1932,30 @@ class Peanut_Connect_API {
 
         // Disable XML-RPC
         if (isset($params['disable_xmlrpc'])) {
-            update_option('peanut_connect_disable_xmlrpc', (bool) $params['disable_xmlrpc']);
+            update_option('peanut_connect_disable_xmlrpc', $params['disable_xmlrpc'] ? '1' : '0');
             $updated['disable_xmlrpc'] = (bool) $params['disable_xmlrpc'];
         }
 
         // Remove WordPress version
         if (isset($params['remove_version'])) {
-            update_option('peanut_connect_remove_version', (bool) $params['remove_version']);
+            update_option('peanut_connect_remove_version', $params['remove_version'] ? '1' : '0');
             $updated['remove_version'] = (bool) $params['remove_version'];
         }
 
         // Disable comments
         if (isset($params['disable_comments'])) {
-            update_option('peanut_connect_disable_comments', (bool) $params['disable_comments']);
+            update_option('peanut_connect_disable_comments', $params['disable_comments'] ? '1' : '0');
             $updated['disable_comments'] = (bool) $params['disable_comments'];
         }
 
         if (isset($params['hide_existing_comments'])) {
-            update_option('peanut_connect_hide_existing_comments', (bool) $params['hide_existing_comments']);
+            update_option('peanut_connect_hide_existing_comments', $params['hide_existing_comments'] ? '1' : '0');
             $updated['hide_existing_comments'] = (bool) $params['hide_existing_comments'];
         }
 
         // Hide login - requires additional class
         if (isset($params['hide_login_enabled'])) {
-            update_option('peanut_connect_hide_login', (bool) $params['hide_login_enabled']);
+            update_option('peanut_connect_hide_login', $params['hide_login_enabled'] ? '1' : '0');
             $updated['hide_login_enabled'] = (bool) $params['hide_login_enabled'];
         }
 
@@ -1862,11 +1990,13 @@ class Peanut_Connect_API {
         $permissions = get_option('peanut_connect_permissions', [
             'perform_updates' => false,
             'access_analytics' => false,
+            'api_proxy' => false,
         ]);
 
         return new WP_REST_Response([
             'perform_updates' => !empty($permissions['perform_updates']),
             'access_analytics' => !empty($permissions['access_analytics']),
+            'api_proxy' => !empty($permissions['api_proxy']),
         ], 200);
     }
 
@@ -1886,6 +2016,10 @@ class Peanut_Connect_API {
 
         if (isset($params['access_analytics'])) {
             $permissions['access_analytics'] = (bool) $params['access_analytics'];
+        }
+
+        if (isset($params['api_proxy'])) {
+            $permissions['api_proxy'] = (bool) $params['api_proxy'];
         }
 
         update_option('peanut_connect_permissions', $permissions);
@@ -1930,6 +2064,444 @@ class Peanut_Connect_API {
             'entries' => $entries,
             'total' => count($entries),
             'counts' => $counts,
+        ], 200);
+    }
+
+    // =====================
+    // Status & Diagnostics endpoint callbacks (for Hub API Tester)
+    // =====================
+
+    /**
+     * Get public status for Hub API Tester
+     *
+     * Returns Connect plugin version, Hub connection status, and sync status.
+     * Used by Hub to verify connectivity and plugin health.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with status information.
+     */
+    public function get_public_status(WP_REST_Request $request): WP_REST_Response {
+        $hub_url = get_option('peanut_connect_hub_url', '');
+        $hub_api_key = get_option('peanut_connect_hub_api_key', '');
+        $last_sync = get_option('peanut_connect_last_hub_sync', '');
+        $tracking_enabled = get_option('peanut_connect_tracking_enabled', false);
+
+        // Check FormFlow status
+        $formflow_active = class_exists('ISF\\Plugin') || class_exists('FormFlow');
+        $formflow_version = null;
+        if ($formflow_active) {
+            if (defined('ISF_VERSION')) {
+                $formflow_version = ISF_VERSION;
+            } elseif (defined('FORMFLOW_VERSION')) {
+                $formflow_version = FORMFLOW_VERSION;
+            }
+        }
+
+        // Get pending sync counts
+        $pending_sync = [];
+        if (class_exists('Peanut_Connect_Database')) {
+            $pending_sync = Peanut_Connect_Database::get_unsynced_counts();
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => [
+                'connect_version' => PEANUT_CONNECT_VERSION,
+                'wp_version' => get_bloginfo('version'),
+                'php_version' => PHP_VERSION,
+                'site_url' => get_site_url(),
+                'hub_connected' => !empty($hub_url) && !empty($hub_api_key),
+                'hub_url' => $hub_url,
+                'last_sync' => $last_sync,
+                'tracking_enabled' => (bool) $tracking_enabled,
+                'formflow' => [
+                    'active' => $formflow_active,
+                    'version' => $formflow_version,
+                ],
+                'pending_sync' => $pending_sync,
+                'timestamp' => current_time('mysql', true),
+            ],
+        ], 200);
+    }
+
+    /**
+     * Get form sync diagnostics for Hub API Tester
+     *
+     * Returns form sync statistics, cached forms count, and submission counts.
+     * Used by Hub to diagnose form sync issues.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with diagnostics information.
+     */
+    public function get_forms_diagnostics(WP_REST_Request $request): WP_REST_Response {
+        global $wpdb;
+
+        $diagnostics = [
+            'hub_forms' => [
+                'table_exists' => false,
+                'count' => 0,
+                'forms' => [],
+            ],
+            'form_submissions' => [
+                'table_exists' => false,
+                'total_count' => 0,
+                'synced_count' => 0,
+                'unsynced_count' => 0,
+                'by_source' => [],
+            ],
+            'formflow' => [
+                'active' => false,
+                'instances_count' => 0,
+                'submissions_count' => 0,
+            ],
+            'sync_status' => [
+                'last_sync' => get_option('peanut_connect_last_hub_sync', ''),
+                'last_form_sync' => get_option('peanut_connect_last_form_sync', ''),
+            ],
+        ];
+
+        // Check Hub forms table
+        $hub_forms_table = $wpdb->prefix . 'peanut_connect_hub_forms';
+        $table_exists = $wpdb->get_var($wpdb->prepare(
+            "SHOW TABLES LIKE %s",
+            $hub_forms_table
+        ));
+
+        if ($table_exists) {
+            $diagnostics['hub_forms']['table_exists'] = true;
+            $diagnostics['hub_forms']['count'] = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM $hub_forms_table"
+            );
+
+            // Get form summaries
+            $forms = $wpdb->get_results(
+                "SELECT hub_form_id, slug, name, form_type, status, version, synced_at
+                 FROM $hub_forms_table
+                 ORDER BY synced_at DESC
+                 LIMIT 20",
+                ARRAY_A
+            );
+            $diagnostics['hub_forms']['forms'] = $forms ?: [];
+        }
+
+        // Check form submissions table
+        $submissions_table = $wpdb->prefix . 'peanut_connect_form_submissions';
+        $table_exists = $wpdb->get_var($wpdb->prepare(
+            "SHOW TABLES LIKE %s",
+            $submissions_table
+        ));
+
+        if ($table_exists) {
+            $diagnostics['form_submissions']['table_exists'] = true;
+            $diagnostics['form_submissions']['total_count'] = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM $submissions_table"
+            );
+            $diagnostics['form_submissions']['synced_count'] = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM $submissions_table WHERE synced = 1"
+            );
+            $diagnostics['form_submissions']['unsynced_count'] = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM $submissions_table WHERE synced = 0"
+            );
+
+            // Get counts by source
+            $by_source = $wpdb->get_results(
+                "SELECT source, COUNT(*) as count FROM $submissions_table GROUP BY source",
+                ARRAY_A
+            );
+            foreach ($by_source as $row) {
+                $diagnostics['form_submissions']['by_source'][$row['source']] = (int) $row['count'];
+            }
+        }
+
+        // Check FormFlow
+        $formflow_active = class_exists('ISF\\Plugin') || class_exists('FormFlow');
+        $diagnostics['formflow']['active'] = $formflow_active;
+
+        if ($formflow_active) {
+            // Try to get FormFlow instance and submission counts
+            $ff_instances_table = $wpdb->prefix . 'isf_instances';
+            $ff_submissions_table = $wpdb->prefix . 'isf_submissions';
+
+            $ff_instances_exists = $wpdb->get_var($wpdb->prepare(
+                "SHOW TABLES LIKE %s",
+                $ff_instances_table
+            ));
+
+            if ($ff_instances_exists) {
+                $diagnostics['formflow']['instances_count'] = (int) $wpdb->get_var(
+                    "SELECT COUNT(*) FROM $ff_instances_table"
+                );
+            }
+
+            $ff_submissions_exists = $wpdb->get_var($wpdb->prepare(
+                "SHOW TABLES LIKE %s",
+                $ff_submissions_table
+            ));
+
+            if ($ff_submissions_exists) {
+                $diagnostics['formflow']['submissions_count'] = (int) $wpdb->get_var(
+                    "SELECT COUNT(*) FROM $ff_submissions_table"
+                );
+            }
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => $diagnostics,
+        ], 200);
+    }
+
+    /**
+     * Test form sync from Hub
+     *
+     * Validates that form data can be properly received and stored.
+     * Used by Hub API Tester to verify form sync is working.
+     *
+     * @param WP_REST_Request $request REST request object with test form data.
+     * @return WP_REST_Response Response with validation results.
+     */
+    public function test_form_sync(WP_REST_Request $request): WP_REST_Response {
+        $test_form = $request->get_json_params();
+
+        $validation = [
+            'received' => true,
+            'parsed' => false,
+            'schema_valid' => false,
+            'can_store' => false,
+            'errors' => [],
+            'warnings' => [],
+        ];
+
+        // Check if we received valid JSON
+        if (empty($test_form)) {
+            $validation['errors'][] = 'No form data received or invalid JSON';
+            return new WP_REST_Response([
+                'success' => false,
+                'data' => $validation,
+            ], 400);
+        }
+
+        $validation['parsed'] = true;
+
+        // Validate required schema fields
+        $required_fields = ['id', 'slug', 'name', 'form_type', 'fields', 'version'];
+        $missing_fields = [];
+
+        foreach ($required_fields as $field) {
+            if (!isset($test_form[$field])) {
+                $missing_fields[] = $field;
+            }
+        }
+
+        if (!empty($missing_fields)) {
+            $validation['errors'][] = 'Missing required fields: ' . implode(', ', $missing_fields);
+        } else {
+            $validation['schema_valid'] = true;
+        }
+
+        // Validate field types
+        if (isset($test_form['id']) && !is_numeric($test_form['id'])) {
+            $validation['errors'][] = 'Field "id" must be numeric';
+            $validation['schema_valid'] = false;
+        }
+
+        if (isset($test_form['slug']) && !is_string($test_form['slug'])) {
+            $validation['errors'][] = 'Field "slug" must be a string';
+            $validation['schema_valid'] = false;
+        }
+
+        if (isset($test_form['fields']) && !is_array($test_form['fields'])) {
+            $validation['errors'][] = 'Field "fields" must be an array';
+            $validation['schema_valid'] = false;
+        }
+
+        if (isset($test_form['version']) && !is_numeric($test_form['version'])) {
+            $validation['errors'][] = 'Field "version" must be numeric';
+            $validation['schema_valid'] = false;
+        }
+
+        // Check valid form types
+        $valid_form_types = ['contact', 'lead', 'survey', 'enrollment', 'scheduler', 'custom'];
+        if (isset($test_form['form_type']) && !in_array($test_form['form_type'], $valid_form_types, true)) {
+            $validation['warnings'][] = 'Unknown form_type "' . $test_form['form_type'] . '". Expected one of: ' . implode(', ', $valid_form_types);
+        }
+
+        // Check if we can store (database table exists)
+        global $wpdb;
+        $hub_forms_table = $wpdb->prefix . 'peanut_connect_hub_forms';
+        $table_exists = $wpdb->get_var($wpdb->prepare(
+            "SHOW TABLES LIKE %s",
+            $hub_forms_table
+        ));
+
+        if ($table_exists) {
+            $validation['can_store'] = true;
+        } else {
+            $validation['warnings'][] = 'Hub forms table does not exist. Form sync may not be set up yet.';
+        }
+
+        // Validate individual fields in the fields array
+        if (isset($test_form['fields']) && is_array($test_form['fields'])) {
+            $field_errors = [];
+            $field_required = ['id', 'type', 'name', 'label'];
+
+            foreach ($test_form['fields'] as $index => $field) {
+                if (!is_array($field)) {
+                    $field_errors[] = "Field at index $index is not an object";
+                    continue;
+                }
+
+                $missing = [];
+                foreach ($field_required as $req) {
+                    if (!isset($field[$req])) {
+                        $missing[] = $req;
+                    }
+                }
+
+                if (!empty($missing)) {
+                    $field_errors[] = "Field at index $index missing: " . implode(', ', $missing);
+                }
+            }
+
+            if (!empty($field_errors)) {
+                $validation['warnings'] = array_merge($validation['warnings'], $field_errors);
+            }
+        }
+
+        // Return success based on whether schema is valid
+        return new WP_REST_Response([
+            'success' => $validation['schema_valid'],
+            'data' => array_merge($validation, [
+                'received_fields' => array_keys($test_form),
+                'field_count' => isset($test_form['fields']) && is_array($test_form['fields'])
+                    ? count($test_form['fields'])
+                    : 0,
+            ]),
+        ], $validation['schema_valid'] ? 200 : 400);
+    }
+
+    // =====================
+    // Event Banner endpoint callbacks (v3.3.0+)
+    // =====================
+
+    /**
+     * Show event banner
+     *
+     * Receives banner data from Hub and activates it on the frontend.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with success status.
+     */
+    public function show_event_banner(WP_REST_Request $request): WP_REST_Response {
+        if (!class_exists('Peanut_Connect_Event_Banner')) {
+            return new WP_REST_Response([
+                'success' => false,
+                'code' => 'module_not_available',
+                'message' => 'Event banner module is not available.',
+            ], 500);
+        }
+
+        $banner_data = [
+            'deployment_id' => $request->get_param('deployment_id'),
+            'event_id' => $request->get_param('event_id'),
+            'html' => $request->get_param('html'),
+            'css' => $request->get_param('css'),
+            'position' => $request->get_param('position'),
+            'show_at' => $request->get_param('show_at'),
+            'hide_at' => $request->get_param('hide_at'),
+            'is_test' => $request->get_param('is_test'),
+        ];
+
+        $result = Peanut_Connect_Event_Banner::set_banner($banner_data);
+
+        if ($result) {
+            return new WP_REST_Response([
+                'success' => true,
+                'message' => 'Banner activated successfully.',
+                'data' => Peanut_Connect_Event_Banner::get_status(),
+            ], 200);
+        }
+
+        return new WP_REST_Response([
+            'success' => false,
+            'code' => 'banner_set_failed',
+            'message' => 'Failed to activate banner.',
+        ], 500);
+    }
+
+    /**
+     * Hide event banner
+     *
+     * Clears the active banner from the frontend.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with success status.
+     */
+    public function hide_event_banner(WP_REST_Request $request): WP_REST_Response {
+        if (!class_exists('Peanut_Connect_Event_Banner')) {
+            return new WP_REST_Response([
+                'success' => false,
+                'code' => 'module_not_available',
+                'message' => 'Event banner module is not available.',
+            ], 500);
+        }
+
+        $result = Peanut_Connect_Event_Banner::clear_banner();
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => $result ? 'Banner hidden successfully.' : 'No active banner to hide.',
+            'data' => Peanut_Connect_Event_Banner::get_status(),
+        ], 200);
+    }
+
+    /**
+     * Get event banner status
+     *
+     * Returns the current banner status for Hub monitoring.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with banner status.
+     */
+    public function get_banner_status(WP_REST_Request $request): WP_REST_Response {
+        if (!class_exists('Peanut_Connect_Event_Banner')) {
+            return new WP_REST_Response([
+                'success' => false,
+                'code' => 'module_not_available',
+                'message' => 'Event banner module is not available.',
+            ], 500);
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => Peanut_Connect_Event_Banner::get_status(),
+        ], 200);
+    }
+
+    /**
+     * Get event banner diagnostics
+     *
+     * Returns detailed diagnostics for the Hub API tester.
+     *
+     * @param WP_REST_Request $request REST request object.
+     * @return WP_REST_Response Response with diagnostics information.
+     */
+    public function get_banner_diagnostics(WP_REST_Request $request): WP_REST_Response {
+        if (!class_exists('Peanut_Connect_Event_Banner')) {
+            return new WP_REST_Response([
+                'success' => false,
+                'code' => 'module_not_available',
+                'message' => 'Event banner module is not available.',
+                'data' => [
+                    'module_active' => false,
+                    'connect_version' => PEANUT_CONNECT_VERSION,
+                ],
+            ], 200);
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'data' => Peanut_Connect_Event_Banner::get_diagnostics(),
         ], 200);
     }
 }

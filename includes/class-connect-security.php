@@ -16,13 +16,13 @@ class Peanut_Connect_Security {
      */
     public static function init(): void {
         // Disable XML-RPC
-        if (get_option('peanut_connect_disable_xmlrpc', false)) {
+        if (get_option('peanut_connect_disable_xmlrpc', '0') === '1') {
             add_filter('xmlrpc_enabled', '__return_false');
             add_filter('wp_xmlrpc_server_class', '__return_false');
         }
 
         // Remove WordPress version from head
-        if (get_option('peanut_connect_remove_version', false)) {
+        if (get_option('peanut_connect_remove_version', '0') === '1') {
             remove_action('wp_head', 'wp_generator');
             add_filter('the_generator', '__return_empty_string');
             add_filter('style_loader_src', [__CLASS__, 'remove_version_from_assets'], 10, 2);
@@ -30,12 +30,12 @@ class Peanut_Connect_Security {
         }
 
         // Disable comments
-        if (get_option('peanut_connect_disable_comments', false)) {
+        if (get_option('peanut_connect_disable_comments', '0') === '1') {
             self::disable_comments();
         }
 
         // Hide login
-        if (get_option('peanut_connect_hide_login', false)) {
+        if (get_option('peanut_connect_hide_login', '0') === '1') {
             $slug = get_option('peanut_connect_login_slug', '');
             if (!empty($slug)) {
                 self::hide_login($slug);
@@ -49,17 +49,17 @@ class Peanut_Connect_Security {
     public static function get_settings(): array {
         return [
             'hide_login' => [
-                'enabled' => get_option('peanut_connect_hide_login', false),
+                'enabled' => get_option('peanut_connect_hide_login', '0') === '1',
                 'custom_slug' => get_option('peanut_connect_login_slug', ''),
                 'available' => true,
             ],
             'disable_comments' => [
-                'enabled' => get_option('peanut_connect_disable_comments', false),
-                'hide_existing' => get_option('peanut_connect_hide_existing_comments', false),
+                'enabled' => get_option('peanut_connect_disable_comments', '0') === '1',
+                'hide_existing' => get_option('peanut_connect_hide_existing_comments', '0') === '1',
             ],
-            'disable_xmlrpc' => get_option('peanut_connect_disable_xmlrpc', false),
+            'disable_xmlrpc' => get_option('peanut_connect_disable_xmlrpc', '0') === '1',
             'disable_file_editing' => defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT,
-            'remove_version' => get_option('peanut_connect_remove_version', false),
+            'remove_version' => get_option('peanut_connect_remove_version', '0') === '1',
         ];
     }
 
@@ -93,7 +93,7 @@ class Peanut_Connect_Security {
         add_filter('pings_open', '__return_false', 20, 2);
 
         // Hide existing comments
-        if (get_option('peanut_connect_hide_existing_comments', false)) {
+        if (get_option('peanut_connect_hide_existing_comments', '0') === '1') {
             add_filter('comments_array', '__return_empty_array', 10, 2);
         }
 

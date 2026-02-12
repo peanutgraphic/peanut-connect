@@ -516,7 +516,7 @@ class Peanut_Connect_Health {
         $recent = Peanut_Connect_Error_Log::get_recent_counts();
 
         return [
-            'enabled' => get_option('peanut_connect_error_logging', true),
+            'enabled' => get_option('peanut_connect_error_logging', '1') !== '0',
             'available' => true,
             'total_entries' => $counts['total'],
             'counts' => $counts,

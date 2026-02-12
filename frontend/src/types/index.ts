@@ -256,6 +256,7 @@ export interface SecuritySettings {
 export interface HubPermissions {
   perform_updates: boolean;
   access_analytics: boolean;
+  api_proxy: boolean;
 }
 
 // Tracking Settings

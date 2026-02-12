@@ -132,6 +132,7 @@ class Peanut_Connect_Hub_Sync {
             'touches' => 0,
             'conversions' => 0,
             'popup_interactions' => 0,
+            'form_submissions' => 0,
         ];
 
         try {
@@ -141,6 +142,7 @@ class Peanut_Connect_Hub_Sync {
             $stats['touches'] = self::sync_touches($hub_url, $api_key);
             $stats['conversions'] = self::sync_conversions($hub_url, $api_key);
             $stats['popup_interactions'] = self::sync_popup_interactions($hub_url, $api_key);
+            $stats['form_submissions'] = self::sync_form_submissions($hub_url, $api_key);
 
             // Update last sync time
             update_option('peanut_connect_last_hub_sync', current_time('mysql', true));
@@ -341,6 +343,53 @@ class Peanut_Connect_Hub_Sync {
                 $synced += count($interactions);
             } else {
                 throw new \Exception('Failed to sync popup interactions: ' . ($response['message'] ?? 'Unknown error'));
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Sync form submissions to hub
+     */
+    private static function sync_form_submissions(string $hub_url, string $api_key): int {
+        if (!class_exists('Peanut_Connect_Forms')) {
+            return 0;
+        }
+
+        $synced = 0;
+
+        while (true) {
+            $submissions = Peanut_Connect_Forms::get_unsynced_submissions(self::BATCH_SIZE);
+
+            if (empty($submissions)) {
+                break;
+            }
+
+            // Format submissions for Hub API
+            $formatted = [];
+            foreach ($submissions as $sub) {
+                $formatted[] = [
+                    'submission_uuid' => $sub['submission_uuid'],
+                    'source' => $sub['source'],
+                    'hub_form_id' => $sub['hub_form_id'],
+                    'form_id' => $sub['formflow_instance_id'] ? (string) $sub['formflow_instance_id'] : null,
+                    'form_name' => $sub['form_name'],
+                    'visitor_id' => $sub['visitor_id'],
+                    'data' => $sub['data'],
+                    'metadata' => $sub['metadata'],
+                    'submitted_at' => $sub['submitted_at'],
+                ];
+            }
+
+            $response = self::send_to_hub($hub_url, $api_key, ['form_submissions' => $formatted]);
+
+            if ($response['success']) {
+                $ids = array_column($submissions, 'id');
+                Peanut_Connect_Forms::mark_submissions_synced($ids);
+                $synced += count($submissions);
+            } else {
+                throw new \Exception('Failed to sync form submissions: ' . ($response['message'] ?? 'Unknown error'));
             }
         }
 

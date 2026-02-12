@@ -226,6 +226,12 @@ class Peanut_Connect_Rate_Limiter {
                 'window' => 60,
             ],
 
+            // API proxy (v3.3.0+)
+            'api_proxy' => [
+                'limit' => 30,
+                'window' => 60,
+            ],
+
             // Standard endpoints
             'health' => [
                 'limit' => 30,

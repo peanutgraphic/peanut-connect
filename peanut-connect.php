@@ -170,6 +170,21 @@ final class Peanut_Connect {
      * Initialize hooks
      */
     private function init_hooks(): void {
+        // Register the custom cron schedule before anything schedules against
+        // it. wp_schedule_event() validates the recurrence against
+        // wp_get_schedules() at call time and silently returns false for one it
+        // does not know, so registering `fifteen_minutes` at the END of this
+        // method meant `peanut_connect_hub_sync` was never scheduled on any
+        // site -- while its siblings survived purely because `hourly`, `daily`
+        // and `weekly` are core recurrences that need no filter.
+        //
+        // Nothing syncing meant nothing was ever marked synced, and
+        // cleanup_old_records() only deletes rows WHERE synced = 1, so the
+        // events/visitors tables grew without bound: 1.42M events / 1.37M
+        // visitors on one site, every row synced = 0, oldest 2026-03-13,
+        // 416MB of a 711MB database. Scheduled on 0 of 17 installs.
+        add_filter('cron_schedules', [$this, 'add_cron_schedules']);
+
         add_action('rest_api_init', [$this, 'register_api_routes']);
         // Register the Peanut Video Gutenberg block (delegates render to the
         // [peanut_video] shortcode). register_block_type() must run on init;
@@ -232,9 +247,6 @@ final class Peanut_Connect {
         if (!wp_next_scheduled('peanut_ml_connect_train')) {
             wp_schedule_event(time(), 'weekly', 'peanut_ml_connect_train');
         }
-
-        // Register custom cron schedule
-        add_filter('cron_schedules', [$this, 'add_cron_schedules']);
 
         // Hub Mode: Hide/disable Suite when connected to Hub (v2.6.0+)
         if ($this->is_hub_connected()) {
